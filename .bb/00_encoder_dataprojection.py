@@ -76,4 +76,5 @@ print(dataset_img_ptch_grps.shape)
 print(type(dataset_img_ptch_grps))
 
 
-    
+# output should be 64 dimension vectors for each patch 
+
