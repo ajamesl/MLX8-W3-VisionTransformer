@@ -8,17 +8,19 @@ from tqdm import tqdm
 batch_size = 128
 epochs = 10
 learning_rate = 1e-3
-patch_size = 7
+patch_size = 16
 embed_dim = 64
 num_heads = 4
 num_layers = 3
 num_classes = 10
 data_path = "./data"
+img_size = 200
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- Dataset & Loader ---
 transform = transforms.Compose([
+        transforms.Resize((img_size, img_size)),
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
     ])
@@ -32,7 +34,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Patch Embedding ---
 class PatchEmbed(nn.Module):
-    def __init__(self, patch_size=7, embed_dim=64, img_size=28, in_chans=1):
+    def __init__(self, patch_size=16, embed_dim=64, img_size=200, in_chans=1):
         super().__init__()
         num_patches = (img_size // patch_size) ** 2
         self.patch_size = patch_size
@@ -76,7 +78,7 @@ class EncoderBlock(nn.Module):
     
 # --- Visual Transformer ---
 class VisualTransformer(nn.Module):
-    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=28, in_chans=1):
+    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=200, in_chans=1):
         super().__init__()
         self.patch_embed = PatchEmbed(patch_size, embed_dim, img_size, in_chans)
         num_patches = (img_size // patch_size) ** 2
@@ -135,7 +137,7 @@ for epoch in range(epochs):
     epoch_accuracy = (correct_total / sample_total) * 100
     print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%")
 
-torch.save(model.state_dict(), 'mnist_vit_encoder.pth')
+torch.save(model.state_dict(), 'mnist_vit_encoder_250x250.pth')
 
 def evaluate(model, data_loader):
     model.eval()

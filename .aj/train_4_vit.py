@@ -29,6 +29,29 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 test_dataset = datasets.MNIST(root=data_path, train=False, download=False, transform=transform)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
+# --- Image Stitching ---
+def stitch_and_resize(images, out_size=250):
+    """
+    images: Tensor of shape (4, 1, 28, 28)
+    Returns: Tensor of shape (1, out_size, out_size)
+    """
+    assert images.shape[0] == 4
+    # Squeeze channel for concatenation
+    images = images.squeeze(1)  # (4, 28, 28)
+    row1 = torch.cat([images[0], images[1]], dim=1)
+    row2 = torch.cat([images[2], images[3]], dim=1)
+    stitched = torch.cat([row1, row2], dim=0).unsqueeze(0)  # (1, 56, 56)
+    # Now resize to (1, out_size, out_size)
+    stitched_resized = TF.resize(stitched, [out_size, out_size])
+    return stitched_resized
+
+def sample_random_images(dataset, num):
+    idxs = random.sample(range(len(dataset)), num)
+    imgs = []
+    for i in idxs:
+        img, _ = dataset[i]  # img: (1, 28, 28)
+        imgs.append(img)
+    return torch.stack(imgs)
 
 # --- Patch Embedding ---
 class PatchEmbed(nn.Module):
