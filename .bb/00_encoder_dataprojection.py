@@ -140,13 +140,60 @@ print ("Dimensions of embedded dataset befor CLS:", B, N, D) # 60000 x 16 x 64
 # Create positional embeddings (learnable)
 position_embed = nn.Parameter(torch.zeros(1, N + 1, D))  # (1, 17, 64)
 nn.init.trunc_normal_(position_embed, std=0.02)
+print("Position embed shape:", position_embed.shape)  # should be (1, 17, 64)
 
 # Add positional encoding to visual transformer input
 # The first position corresponds to the CLS token, followed by the patches
 # The positional encoding is added to the CLS token and patch embeddings
 # The shape of position_embed is (1, 17, 64) to match the shape of mnist_vctrs_CLS
-Visual_Transformer_input = mnist_vctrs_CLS + position_embed 
-print("Visual_Transformer_input shape:", Visual_Transformer_input.shape) # (60000, 17, 64)
+# Dimensions of size 1 in the smaller tensor are stretched to match the corresponding size in the larger tensor
+# so the same positional encoding is added identically across the entire batch 
+visual_transformer_input = mnist_vctrs_CLS + position_embed 
+
+
+print("visual_transformer_input shape:", visual_transformer_input.shape) # (60000, 17, 64)
+
+# demonstrate the difference between visual_transformer_input and mnist_vctrs_CLS
+print("Visual Transformer Input vs MNIST Vectors CLS:")
+print("Visual Transformer Input:", visual_transformer_input[0])  # First image with CLS
+print("MNIST Vectors CLS:", mnist_vctrs_CLS[0])
+
+
+
+# build self attention module
+
+class SelfAttention(nn.Module):
+    def __init__(self, embed_dim):
+        super().__init__()
+        # B, N, D = batch size, number of tokens, emb dim
+        self.embed_dim = embed_dim
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.final_linear = nn.Linear(embed_dim, embed_dim)
+        
+    def forward(self, x):
+        """Forward pass of the self-attention module."""
+        # x: B, N, D
+        Q = self.q_proj(x)  # Query: B, N, D
+        K = self.k_proj(x)  # Key: B, N, D
+        V = self.v_proj(x)  # Value: B, N, D
+        
+        # compute attention scores
+        attn_scores = Q @ K.transpose(-2, -1) * (self.embed_dim ** -0.5)  # (B, N, N) @ sign is matrix multiplacation
+        attn_weights = attn_scores.softmax(dim=-1)  # (B, N, N)
+
+        # apply attention weights to values
+        out = attn_weights @ V  # (B, N, D)
+        return self.final_linear(out)
+
+# test self attention module 
+
+attn = SelfAttention(embed_dim=64)
+x = torch.randn(2, 10, 64)  # (batch, tokens, embed dim)
+
+out = attn(x)
+print(out.shape)
 
 class TransformerEncoder(nn.Module):
     def __init__(self, embed_dim, num_heads):
@@ -173,7 +220,9 @@ class TransformerEncoder(nn.Module):
         x = self.mlp(x)
         x = x + x_res2             # Residual connection 2
         return x
-    
+
+# VALUE IS VALUE!
+   
 class VisualTransformer(nn.Module):
     """Visual Transformer for the MNIST dataset."""
     def __init__(self, embed_dim, num_heads, num_layers, num_classes=10):
@@ -191,7 +240,7 @@ class VisualTransformer(nn.Module):
 
 # Example with first 128 images:
 B = 128
-test_x = Visual_Transformer_input[:B]           # shape: (128, 17, 64)
+test_x = visual_transformer_input[:B]           # shape: (128, 17, 64)
 test_labels = all_labels[:B]     # shape: (128,)
 
 num_heads = 4
