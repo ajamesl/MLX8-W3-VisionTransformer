@@ -170,28 +170,34 @@ class SelfAttention(nn.Module):
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
+        
         # linear projections for Q, K, V
-        self.q_proj = nn.Linear(embed_dim, embed_dim)
-        self.k_proj = nn.Linear(embed_dim, embed_dim)
-        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.q_proj = nn.Linear(embed_dim, embed_dim) 
+        # Applies a linear transformation to the input tensor to produce the query tensor Q using learned weights W_q
+        self.k_proj = nn.Linear(embed_dim, embed_dim) 
+        # Applies a linear transformation to the input tensor to produce the query tensor K using learned weights W_k
+        self.v_proj = nn.Linear(embed_dim, embed_dim) 
+        # Applies a linear transformation to the input tensor to produce the query tensor V using learned weights W_v
+        
         self.final_linear = nn.Linear(embed_dim, embed_dim)
         
     def forward(self, x):
         """Forward pass of the self-attention module."""
         # x: B, N, D
-        B, N, D = x.shape  # B: batch size, N: number of tokens (patches + CLS), D: embedding dimension
+        B, N, D = x.shape # B: batch size, N: number of tokens (patches + CLS), D: embedding dimension
         
         Q = self.q_proj(x)  # Query: B, N, D
         K = self.k_proj(x)  # Key: B, N, D
         V = self.v_proj(x)  # Value: B, N, D
         
-        # Reshape Q, K, V for multi-head attention
+        # Reshape Q, K, V for multi-head attention, transpose switches the dimensions 
+        # to optermise for multi-head computations
         Q = Q.view(B, N, self.num_heads, self.head_dim).transpose(1,2)  # (B, N, num_heads, head_dim)
         K = K.view(B, N, self.num_heads, self.head_dim).transpose(1,2)  # (B, N, num_heads, head_dim)
         V = V.view(B, N, self.num_heads, self.head_dim).transpose(1,2)  # (B, N, num_heads, head_dim)
-        # how do I reshape these together?
+        
         # compute attention scores
-        attn_scores = Q @ K.transpose(-2, -1) * (self.embed_dim ** -0.5)  # (B, N, N) @ sign is matrix multiplacation
+        attn_scores = Q @ K.transpose(-2, -1) * (self.embed_dim ** -0.5)  # (B, N, N),  @ sign is matrix multiplacation
         attn_weights = attn_scores.softmax(dim=-1)  # (B, N, N)
 
         # apply attention weights to values
@@ -213,6 +219,7 @@ class TransformerEncoder(nn.Module):
         super().__init__()
         self.norm1 = nn.LayerNorm(embed_dim)
         self.attention = SelfAttention(embed_dim, num_heads)
+        #self.attention2 = nn.MultiheadAttention(embed_dim, num_heads)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, embed_dim * 4), 
