@@ -163,10 +163,14 @@ print("MNIST Vectors CLS:", mnist_vctrs_CLS[0])
 # build self attention module
 
 class SelfAttention(nn.Module):
-    def __init__(self, embed_dim):
+    def __init__(self, embed_dim, num_heads):
         super().__init__()
         # B, N, D = batch size, number of tokens, emb dim
+        assert embed_dim % num_heads == 0
         self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        # linear projections for Q, K, V
         self.q_proj = nn.Linear(embed_dim, embed_dim)
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
@@ -175,35 +179,44 @@ class SelfAttention(nn.Module):
     def forward(self, x):
         """Forward pass of the self-attention module."""
         # x: B, N, D
+        B, N, D = x.shape  # B: batch size, N: number of tokens (patches + CLS), D: embedding dimension
+        
         Q = self.q_proj(x)  # Query: B, N, D
         K = self.k_proj(x)  # Key: B, N, D
         V = self.v_proj(x)  # Value: B, N, D
         
+        # Reshape Q, K, V for multi-head attention
+        Q = Q.view(B, N, self.num_heads, self.head_dim).transpose(1,2)  # (B, N, num_heads, head_dim)
+        K = K.view(B, N, self.num_heads, self.head_dim).transpose(1,2)  # (B, N, num_heads, head_dim)
+        V = V.view(B, N, self.num_heads, self.head_dim).transpose(1,2)  # (B, N, num_heads, head_dim)
+        # how do I reshape these together?
         # compute attention scores
         attn_scores = Q @ K.transpose(-2, -1) * (self.embed_dim ** -0.5)  # (B, N, N) @ sign is matrix multiplacation
         attn_weights = attn_scores.softmax(dim=-1)  # (B, N, N)
 
         # apply attention weights to values
         out = attn_weights @ V  # (B, N, D)
+        out = out.transpose(1,2).contiguous().view(B,N, self.embed_dim)
         return self.final_linear(out)
 
 # test self attention module 
 
-attn = SelfAttention(embed_dim=64)
-x = torch.randn(2, 10, 64)  # (batch, tokens, embed dim)
+attn = SelfAttention(embed_dim=64, num_heads=8)
+x = torch.randn(2, 16, 64)  # (batch, tokens, embed dim)
 
 out = attn(x)
 print(out.shape)
 
+
 class TransformerEncoder(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
-        self.linear1 = nn.LayerNorm(embed_dim)
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
-        self.linear2 = nn.LayerNorm(embed_dim)
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attention = SelfAttention(embed_dim, num_heads)
+        self.norm2 = nn.LayerNorm(embed_dim)
         self.mlp = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim * 4), # why by 4?
-            nn.GELU(), # why gelu
+            nn.Linear(embed_dim, embed_dim * 4), 
+            nn.GELU(),
             nn.Linear(embed_dim * 4, embed_dim)
         )
     
@@ -211,32 +224,54 @@ class TransformerEncoder(nn.Module):
         """Forward pass of the encoder block."""
         # x shape: (B, N, D) where B is batch size, N is number of patches + 1 (CLS token), D is embedding dimension
         x_res1 = x
-        x = self.linear1(x)
-        x, _ = self.attention(x, x, x)  # Self-attention
+        x = self.norm1(x)
+        x= self.attention(x) # Self-attention
         x = x + x_res1             # Residual connection 1
 
         x_res2 = x
-        x = self.linear2(x)
+        x = self.norm2(x)
         x = self.mlp(x)
         x = x + x_res2             # Residual connection 2
         return x
-
-# VALUE IS VALUE!
    
+# test transformerencoder module 
+transformer = TransformerEncoder(embed_dim=64, num_heads=8)
+x = torch.randn(2, 16, 64)  # (batch, tokens, embed dim)
+
+out = transformer(x)
+print(out.shape)
+   
+
 class VisualTransformer(nn.Module):
     """Visual Transformer for the MNIST dataset."""
     def __init__(self, embed_dim, num_heads, num_layers, num_classes=10):
         super().__init__()
-        self.layers = nn.ModuleList([TransformerEncoder(embed_dim, num_heads) for _ in range(num_layers)])
-        self.ln = nn.LayerNorm(embed_dim)
-        self.head = nn.Linear(embed_dim, num_classes)
+        self.encoder = nn.ModuleList([TransformerEncoder(embed_dim, num_heads) for _ in range(num_layers)])
+        self.layer_norm = nn.LayerNorm(embed_dim)
+        self.mlp_head = nn.Linear(embed_dim, num_classes)
 
     def forward(self, x):
         """Forward pass of the Visual Transformer."""
-        for layer in self.layers:
-            x = layer(x)
-        x = self.ln(x)
-        return self.head(x[:, 0, :])  # Use CLS token for classification    
+        for layer in self.encoder:
+            x = self.layer_norm(x)
+        x = self.layer_norm(x)
+        return self.mlp_head(x[:, 0, :])  # Use CLS token for classification    
+
+
+# to do 
+# draw diagram in miro to clarify logic of architecture 
+# exact functionality of each block / layer 
+# add training loop and run on local computer 
+# evaluate the model and test its peformance 
+# compare to CNN 
+
+
+
+
+
+
+
+
 
 # Example with first 128 images:
 B = 128
