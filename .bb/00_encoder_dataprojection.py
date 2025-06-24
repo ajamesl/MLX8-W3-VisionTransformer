@@ -6,12 +6,10 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import random
 %matplotlib inline
-
-import sys
-print(sys.executable)
 import numpy
-print(numpy.__version__)
 
+
+# load and normalise the MNIST dataset
 
 transform = transforms.Compose([
         transforms.ToTensor(),
@@ -21,16 +19,15 @@ transform = transforms.Compose([
 train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
 test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
 
-# PSEUDOCODE 
-# split images into 4 x 4 = 7,7,7,7 cd # split images into patches of size 7 x 7
-# create linear layer to project patches to 64 dimension vectors
+# check the shape of the first image
 img, label = train_dataset[0]
-print(img.shape)    # e.g., torch.Size([1, 28, 28])
+print(img.shape)    # should be torch.Size([1, 28, 28])
 print(type(label))
-
+# check the shape of the dataset
 print (train_dataset.data.shape)
 print (type(train_dataset.data))
 
+# define function to split an individualimage
 def split_image(images, height, width):
     
     """
@@ -63,10 +60,8 @@ print(type(dataset_test_patch))
 print(label)
 
 
-# Set up linear layer to feed patches through (169 x 64) outputting vector of (1 x 64)
-
-# take first 16 patches 
-# put each patch into one vector 
+# iterate through the dataset and split the images into patches
+# create a list of all patches and labels 
 
 all_patches = [split_image(img,7,7) for img, _ in train_dataset] 
 all_patches = torch.stack(all_patches)
@@ -77,42 +72,28 @@ print (type(all_labels))
 print (all_patches.shape)
 print (all_labels.shape)
 
-def patch_to_vector():
+def patch_to_vector(dataset='Tensor'):
     '''
-    convert each patch into a vector of size 49  
-    QUESTION: do we need to keep the labels? 
-       
+    convert each patch into a vector of size 49     
     '''
-    return dataset_patches.view(dataset_patches.shape[0], -1)
+    dataset = dataset
+    return dataset.view(60000,16,-1)
 
-dataset_vectors = patch_to_vector()
+dataset_vectors = patch_to_vector(all_patches)
 print(dataset_vectors.shape)
 print(type(dataset_vectors))
 
-# split dataset vectors into groups iof 16 patches ( one for each image)
-def split_into_groups(vectors, group_size):
-    """
-    split the dataset vectors into groups according to the original images
-
-    Args:
-        vectors (_type_): _description_
-        group_size (_type_): _description_
-    """
-    num_groups = vectors.shape[0] // group_size
-    return vectors.view(num_groups, group_size, -1) 
-
-dataset_img_ptch_grps = split_into_groups(dataset_vectors, 16) 
-
-print(dataset_img_ptch_grps.shape)
-print(type(dataset_img_ptch_grps))
-
 # create linear nn to project patches to 64 dimension vectors 
+patch_size = 7
+embed_dim = 64
+patch_dim = patch_size * patch_size
+
 class PatchProjector(torch.nn.Module):
     
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, patch_dim, embed_dim):
     
         super(PatchProjector, self).__init__()
-        self.linear = nn.Linear(input_dim, output_dim)
+        self.linear = nn.Linear(patch_dim, embed_dim)
         
     def forward(self, x):
         '''
@@ -124,12 +105,15 @@ class PatchProjector(torch.nn.Module):
         return x
 
 
-patch_projector = PatchProjector(49, 64)
-example_patches = dataset_img_ptch_grps[0].float()
+patch_projector = PatchProjector(patch_dim, embed_dim)
+example_patches = dataset_vectors[0].float()
 example_output = patch_projector(example_patches)
-print("Example output shape:", example_output.shape)
+print("Example output shape:", example_output.shape) # output should be (16, 64)
+
 
 # prepend CLR, random matrix, 1 x 64, 
+
+
 
 
 
