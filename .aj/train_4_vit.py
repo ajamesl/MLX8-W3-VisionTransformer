@@ -274,11 +274,9 @@ for epoch in range(epochs):
         preds = logits.argmax(dim=1)
         correct_total += (preds == y_target).sum().item()
         sample_total += y_target.numel()
-        break
 
     epoch_accuracy = (correct_total / sample_total) * 100
     print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%")
-    break
 
 torch.save(model.state_dict(), 'mnist_vit_4_enc_dec.pth')
 
