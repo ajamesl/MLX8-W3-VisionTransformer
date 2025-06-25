@@ -21,6 +21,7 @@ dependencies = [
     "packaging==25.0",
     "pillow==11.2.1",
     "pyparsing==3.2.3",
+    "pytest>=8.4.1",
     "python-dateutil==2.9.0.post0",
     "six==1.17.0",
     "sympy==1.14.0",
