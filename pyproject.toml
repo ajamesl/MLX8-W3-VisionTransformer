@@ -29,4 +29,9 @@ dependencies = [
     "torchvision==0.17.2",
     "tqdm==4.67.1",
     "typing-extensions==4.14.0",
+    "wandb>=0.20.1",
 ]
+[tool.ruff]
+line-length = 88
+extend-select = ["I"]  # enables import sorting
+ignore = ["I001"]  # Don't warn if import block is unformatted
