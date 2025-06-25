@@ -14,7 +14,7 @@ num_heads = 4
 num_layers = 3
 num_classes = 10
 data_path = "./data"
-img_size = 200
+img_size = 256
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -34,7 +34,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Patch Embedding ---
 class PatchEmbed(nn.Module):
-    def __init__(self, patch_size=16, embed_dim=64, img_size=200, in_chans=1):
+    def __init__(self, patch_size=patch_size, embed_dim=embed_dim, img_size=img_size, in_chans=1):
         super().__init__()
         num_patches = (img_size // patch_size) ** 2
         self.patch_size = patch_size
@@ -78,7 +78,7 @@ class EncoderBlock(nn.Module):
     
 # --- Visual Transformer ---
 class VisualTransformer(nn.Module):
-    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=200, in_chans=1):
+    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=img_size, in_chans=1):
         super().__init__()
         self.patch_embed = PatchEmbed(patch_size, embed_dim, img_size, in_chans)
         num_patches = (img_size // patch_size) ** 2
@@ -113,7 +113,8 @@ model = VisualTransformer(
     embed_dim=embed_dim,
     num_heads=num_heads,
     num_layers=num_layers,
-    num_classes=num_classes
+    num_classes=num_classes,
+    img_size=img_size
 ).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -137,7 +138,7 @@ for epoch in range(epochs):
     epoch_accuracy = (correct_total / sample_total) * 100
     print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%")
 
-torch.save(model.state_dict(), 'mnist_vit_encoder_250x250.pth')
+torch.save(model.state_dict(), 'mnist_vit_encoder_200x200.pth')
 
 def evaluate(model, data_loader):
     model.eval()
