@@ -257,13 +257,14 @@ for epoch in range(epochs):
     for x_batch, y_batch in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
         print("x_batch stats:", x_batch.min().item(), x_batch.max().item(), x_batch.mean().item())
-        print("y_input stats:", y_input.min().item(), y_input.max().item(), y_input.mean().item())
+
         print("pos_encod_enc stats:", model.pos_encod_enc.min().item(), model.pos_encod_enc.max().item())
         print("pos_encod_dec stats:", model.pos_encod_dec.min().item(), model.pos_encod_dec.max().item())
 
         B = x_batch.size(0)
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
         y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
+        print("y_input stats:", y_input.min().item(), y_input.max().item(), y_input.mean().item())
         y_target = y_batch.clone() # (B, seq_len)
         logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
 
