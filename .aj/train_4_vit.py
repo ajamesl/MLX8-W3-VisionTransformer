@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
+import torchvision.transforms.functional as TF
 import random
 from tqdm import tqdm
 
@@ -14,8 +15,8 @@ embed_dim = 64
 num_heads = 4
 num_layers = 3
 num_classes = 10
-data_path = "./data"
 img_size = 256
+data_path = "./data"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -32,31 +33,56 @@ test_dataset = datasets.MNIST(root=data_path, train=False, download=False, trans
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Image Stitching ---
-def stitch_and_resize(images, out_size=img_size):
+def stitch_and_resize(images, labels, out_size=img_size):
     """
     images: Tensor of shape (4, 1, 28, 28)
-    Returns: Tensor of shape (1, out_size, out_size)
+    labels: Tensor of 4 integers representing the labels of the images
+    Returns: Tensor of shape (1, out_size, out_size) and a tensor of labels of shape (4,)
     """
     assert images.shape[0] == 4
     # Squeeze channel for concatenation
     images = images.squeeze(1)  # (4, 28, 28)
+    # Extract the label from each image and append in order of image selection
+    labels = torch.tensor(labels)  # (4,)
     row1 = torch.cat([images[0], images[1]], dim=1)
     row2 = torch.cat([images[2], images[3]], dim=1)
     stitched = torch.cat([row1, row2], dim=0).unsqueeze(0)  # (1, 56, 56)
     # Now resize to (1, out_size, out_size)
     stitched_resized = TF.resize(stitched, [out_size, out_size])
-    return stitched_resized
+    return stitched_resized, labels
 
-def sample_random_images(dataset, num):
+def sample_random_images(dataset, num=4):
+    """ Function to sample (4) random images from the dataset 
+    Returns: Tensor of shape (num, 1, 56, 56) """
     idxs = random.sample(range(len(dataset)), num)
-    imgs = []
+    imgs, labels = [], []
     for i in idxs:
-        img, _ = dataset[i]  # img: (1, 56, 56)
+        img, label = dataset[i]  # img: (1, 56, 56)
         imgs.append(img)
-    return torch.stack(imgs)
+        labels.append(label)
+    return torch.stack(imgs), torch.tensor(labels)
+
+# --- Custom Dataset ---
+class CustomMNISTDataset(torch.utils.data.Dataset):
+    """ Custom Dataset for MNIST that stitches a given number of images together """
+    def __init__(self, mnist_dataset, length=60000, num_images=4):
+        self.mnist_dataset = mnist_dataset
+        self.length = length
+        self.num_images = num_images
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        # Get 4 random images and their labels
+        images, labels = sample_random_images(self.mnist_dataset, num=self.num_images)
+        stitched_image, stitched_label = stitch_and_resize(images, labels)
+        return stitched_image, stitched_label
 
 # --- Patch Embedding ---
 class PatchEmbed(nn.Module):
+    """ Patch Embedding Layer for Vision Transformer
+    Args:"""
     def __init__(self, patch_size=patch_size, embed_dim=embed_dim, img_size=img_size, in_chans=1):
         super().__init__()
         num_patches = (img_size // patch_size) ** 2
@@ -123,7 +149,7 @@ class DecoderBlock(nn.Module):
         x = x + x_res1
 
         x_res2 = x
-        x, _ = self.cross_attn(q=x, k=enc_out, v=enc_out)
+        x, _ = self.cross_attn(x, enc_out, enc_out)
 
         x = self.ln2(x)
         x = x + x_res2
@@ -135,7 +161,7 @@ class DecoderBlock(nn.Module):
     
 # --- Visual Transformer ---
 class VisualTransformer(nn.Module):
-    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=img_size, in_chans=1, seq_len=5):
+    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=img_size, in_chans=1, seq_len=4):
         super().__init__()
         self.patch_embed = PatchEmbed(patch_size, embed_dim, img_size, in_chans)
         num_patches = (img_size // patch_size) ** 2
@@ -162,22 +188,53 @@ class VisualTransformer(nn.Module):
     def forward(self, x, y):
         # x: (B, 1, 256, 256)
         B = x.shape[0]
-        x = self.patch_embed(x)           # (B, 256, embed_dim)
+        x = self.patch_embed(x)                        # (B, 256, embed_dim)
         cls_tokens = self.cls_token.expand(B, -1, -1)  # (B, 1, embed_dim)
         x = torch.cat((cls_tokens, x), dim=1)          # (B, 257, embed_dim)
-        x = x + self.pos_encod_enc                        # (B, 257, embed_dim)
+        x = x + self.pos_encod_enc                     # (B, 257, embed_dim)
         for block in self.encoder:
             x = block(x)
-        x = self.norm(x)                 # (B, 257, embed_dim)
+        x = self.norm(x)                               # (B, 257, embed_dim)
 
-        tok_emb = self.tok_embed(y)  # (num_classes + 1, embed_dim)
+        # y: (B, seq_len)
+        y = self.tok_embed(y)                                 # (B, seq_len, embed_dim)
         pos_encod_dec = self.pos_encod_dec.expand(B, -1, -1)  # (B, seq_len, embed_dim)
-        y = tok_emb + pos_encod_dec  # (B, seq_len, embed_dim)
+        y = y + pos_encod_dec                           # (B, seq_len, embed_dim)
         mask = torch.tril(torch.ones((self.seq_len, self.seq_len), device=x.device)).bool()
         for block in self.decoder:
-            y = block(y, x, mask=mask)
-        out = self.linear(y)
+            y = block(y, x, mask=mask)      # (B, seq_len, embed_dim)
+        out = self.linear(y)                # (B, seq_len, vocab_size)
         return out
+
+def evaluate(model, data_loader):
+    model.eval()
+    correct, total = 0, 0
+    with torch.no_grad():
+        for x, y in data_loader:
+            x, y = x.to(device), y.to(device)
+            B = x.size(0)
+            start_toks = torch.full((B, 1), 10, dtype=y.dtype, device=y.device)
+            y_inp = torch.cat([start_toks, y[:, :-1]], dim=1)
+            y_tar = y.clone() # (B, seq_len)
+            logits = model(x, y_inp)
+
+            voc_size = logits.size(-1)
+            logits = logits.reshape(-1, voc_size) # (B * seq_len, vocab_size)
+            y_tar = y_tar.reshape(-1) # (B * seq_len)
+            preds = logits.argmax(dim=1)
+            correct += (preds == y_tar).sum().item()
+            total += y_tar.numel()
+
+    accuracy = 100 * correct / total
+    return accuracy
+
+
+# --- Build Custom Dataset and DataLoader ---
+train_dataset_stitch = CustomMNISTDataset(train_dataset, num_images=4, length=120000)
+train_loader_stitch = DataLoader(train_dataset_stitch, batch_size=batch_size, shuffle=True)
+
+test_dataset_stitch = CustomMNISTDataset(test_dataset, num_images=4, length=20000)
+test_loader_stitch = DataLoader(test_dataset_stitch, batch_size=batch_size, shuffle=False)
 
 
 # --- Instantiate Model ---
@@ -197,35 +254,32 @@ loss_fn = nn.CrossEntropyLoss()
 for epoch in range(epochs):
     correct_total, sample_total = 0, 0
     model.train()
-    for x_batch, y_batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
+    for x_batch, y_batch in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-        logits = model(x_batch)
-        loss = loss_fn(logits, y_batch)
+        B = x_batch.size(0)
+        start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
+        y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
+        y_target = y_batch.clone() # (B, seq_len)
+        logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
+
+        # Flatten loss & y_target to avoid loss not averaging across all tokens in all batches
+        vocab_size = logits.size(-1)
+        logits = logits.reshape(-1, vocab_size) # (B * seq_len, vocab_size)
+        y_target = y_target.reshape(-1) # (B * seq_len)
+        loss = loss_fn(logits, y_target)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         preds = logits.argmax(dim=1)
-        correct_total += (preds == y_batch).sum().item()
-        sample_total += len(y_batch)
+        correct_total += (preds == y_target).sum().item()
+        sample_total += y_target.numel()
+
     epoch_accuracy = (correct_total / sample_total) * 100
     print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%")
 
-torch.save(model.state_dict(), 'mnist_vit_encoder.pth')
-
-def evaluate(model, data_loader):
-    model.eval()
-    correct, total = 0, 0
-    with torch.no_grad():
-        for x, y in data_loader:
-            x, y = x.to(device), y.to(device)
-            logits = model(x)
-            preds = logits.argmax(dim=1)
-            correct += (preds == y).sum().item()
-            total += len(y)
-    accuracy = 100 * correct / total
-    return accuracy
+torch.save(model.state_dict(), 'mnist_vit_4_enc_dec.pth')
 
 # After training:
-test_accuracy = evaluate(model, test_loader)
+test_accuracy = evaluate(model, test_loader_stitch)
 print(f"Test Accuracy: {test_accuracy:.2f}%")
