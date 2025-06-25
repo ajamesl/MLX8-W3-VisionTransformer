@@ -264,7 +264,7 @@ for epoch in range(epochs):
         B = x_batch.size(0)
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
         y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
-        print("y_input stats:", y_input.min().item(), y_input.max().item(), y_input.mean().item())
+        print("y_input stats:", y_input.min().item(), y_input.max().item(), y_input.float().mean().item())
         y_target = y_batch.clone() # (B, seq_len)
         logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
 
