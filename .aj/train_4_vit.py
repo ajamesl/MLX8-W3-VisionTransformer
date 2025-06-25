@@ -200,7 +200,7 @@ class VisualTransformer(nn.Module):
         y = self.tok_embed(y)                                 # (B, seq_len, embed_dim)
         pos_encod_dec = self.pos_encod_dec.expand(B, -1, -1)  # (B, seq_len, embed_dim)
         y = y + pos_encod_dec                           # (B, seq_len, embed_dim)
-        mask = torch.tril(torch.ones((self.seq_len, self.seq_len), device=x.device)).bool()
+        mask = torch.triu(torch.ones((self.seq_len, self.seq_len), device=x.device), diagonal=1).bool()
         for block in self.decoder:
             y = block(y, x, mask=mask)      # (B, seq_len, embed_dim)
         out = self.linear(y)                # (B, seq_len, vocab_size)
@@ -256,32 +256,16 @@ for epoch in range(epochs):
     model.train()
     for x_batch, y_batch in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-        print("x_batch stats:", x_batch.min().item(), x_batch.max().item(), x_batch.mean().item())
-
-        print("pos_encod_enc stats:", model.pos_encod_enc.min().item(), model.pos_encod_enc.max().item())
-        print("pos_encod_dec stats:", model.pos_encod_dec.min().item(), model.pos_encod_dec.max().item())
-
         B = x_batch.size(0)
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
         y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
-        print("y_input stats:", y_input.min().item(), y_input.max().item(), y_input.float().mean().item())
         y_target = y_batch.clone() # (B, seq_len)
         logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
-
-        print("Logits stats:", logits.min().item(), logits.max().item(), logits.mean().item())
-        print("y_target stats:", y_target.min().item(), y_target.max().item())
-        print("Any NaN logits?", torch.isnan(logits).any().item())
-        print("Any NaN targets?", torch.isnan(y_target.float()).any().item())
 
         # Flatten loss & y_target to avoid loss not averaging across all tokens in all batches
         vocab_size = logits.size(-1)
         logits = logits.reshape(-1, vocab_size) # (B * seq_len, vocab_size)
         y_target = y_target.reshape(-1) # (B * seq_len)
-
-        print("Logits stats flat:", logits.min().item(), logits.max().item(), logits.mean().item())
-        print("y_target stats flat:", y_target.min().item(), y_target.max().item())
-        print("Any NaN logits flat?", torch.isnan(logits).any().item())
-        print("Any NaN targets flat?", torch.isnan(y_target.float()).any().item())
         loss = loss_fn(logits, y_target)
         optimizer.zero_grad()
         loss.backward()
