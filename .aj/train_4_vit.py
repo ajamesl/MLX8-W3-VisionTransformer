@@ -60,7 +60,7 @@ def sample_random_images(dataset, num=4):
         img, label = dataset[i]  # img: (1, 56, 56)
         imgs.append(img)
         labels.append(label)
-    return torch.stack(imgs), torch.tensor(labels)
+    return torch.stack(imgs), labels
 
 # --- Custom Dataset ---
 class CustomMNISTDataset(torch.utils.data.Dataset):
@@ -262,10 +262,20 @@ for epoch in range(epochs):
         y_target = y_batch.clone() # (B, seq_len)
         logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
 
+        print("Logits stats:", logits.min().item(), logits.max().item(), logits.mean().item())
+        print("y_target stats:", y_target.min().item(), y_target.max().item())
+        print("Any NaN logits?", torch.isnan(logits).any().item())
+        print("Any NaN targets?", torch.isnan(y_target.float()).any().item())
+
         # Flatten loss & y_target to avoid loss not averaging across all tokens in all batches
         vocab_size = logits.size(-1)
         logits = logits.reshape(-1, vocab_size) # (B * seq_len, vocab_size)
         y_target = y_target.reshape(-1) # (B * seq_len)
+
+        print("Logits stats flat:", logits.min().item(), logits.max().item(), logits.mean().item())
+        print("y_target stats flat:", y_target.min().item(), y_target.max().item())
+        print("Any NaN logits flat?", torch.isnan(logits).any().item())
+        print("Any NaN targets flat?", torch.isnan(y_target.float()).any().item())
         loss = loss_fn(logits, y_target)
         optimizer.zero_grad()
         loss.backward()
