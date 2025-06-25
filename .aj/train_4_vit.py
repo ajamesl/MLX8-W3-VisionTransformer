@@ -247,20 +247,6 @@ model = VisualTransformer(
     img_size=img_size,
 ).to(device)
 
-x_dummy = torch.zeros_like(x_batch)
-y_dummy = torch.zeros_like(y_input)
-logits_dummy = model(x_dummy, y_dummy)
-print("Logits dummy stats:", logits_dummy.min().item(), logits_dummy.max().item(), logits_dummy.mean().item())
-
-model = VisualTransformer(
-    patch_size=patch_size,
-    embed_dim=embed_dim,
-    num_heads=num_heads,
-    num_layers=num_layers,
-    num_classes=num_classes,
-    img_size=img_size,
-).to(device)
-
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 loss_fn = nn.CrossEntropyLoss()
 
