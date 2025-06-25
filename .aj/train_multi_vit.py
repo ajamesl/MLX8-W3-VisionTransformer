@@ -77,15 +77,13 @@ class CustomMNISTDataset(torch.utils.data.Dataset):
         return self.length
 
     def __getitem__(self, idx):
-        num = torch.randint(1, 11, (1,)).item()  # random N in [1,10]
-        idxs = torch.randint(0, len(self.mnist_dataset), (num,))
-        imgs, labels = [], []
-        for i in idxs:
-            img, label = self.mnist_dataset[i.item()]
-            imgs.append(img)
-            labels.append(label)
+        # Get N random images and their labels
+        num = torch.randint(1, 11, (1,)).item()  # Randomly choose between 1 and 10
+        idxs = torch.randint(0, len(self.mnist_dataset), (num,)) # Random indices
+        # Get images and labels from the dataset
+        imgs, labels = zip(*(self.mnist_dataset[i.item()] for i in idxs))
         images = torch.stack(imgs)
-        stitched_image, stitched_label = stitch_and_resize(images, labels)
+        stitched_image, stitched_label = stitch_and_resize(imgs, labels)
         return stitched_image, stitched_label
 
 # --- Patch Embedding ---
