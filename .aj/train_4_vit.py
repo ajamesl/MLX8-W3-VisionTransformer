@@ -247,6 +247,20 @@ model = VisualTransformer(
     img_size=img_size,
 ).to(device)
 
+x_dummy = torch.zeros_like(x_batch)
+y_dummy = torch.zeros_like(y_input)
+logits_dummy = model(x_dummy, y_dummy)
+print("Logits dummy stats:", logits_dummy.min().item(), logits_dummy.max().item(), logits_dummy.mean().item())
+
+model = VisualTransformer(
+    patch_size=patch_size,
+    embed_dim=embed_dim,
+    num_heads=num_heads,
+    num_layers=num_layers,
+    num_classes=num_classes,
+    img_size=img_size,
+).to(device)
+
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 loss_fn = nn.CrossEntropyLoss()
 
@@ -256,6 +270,11 @@ for epoch in range(epochs):
     model.train()
     for x_batch, y_batch in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+        print("x_batch stats:", x_batch.min().item(), x_batch.max().item(), x_batch.mean().item())
+        print("y_input stats:", y_input.min().item(), y_input.max().item(), y_input.mean().item())
+        print("pos_encod_enc stats:", model.pos_encod_enc.min().item(), model.pos_encod_enc.max().item())
+        print("pos_encod_dec stats:", model.pos_encod_dec.min().item(), model.pos_encod_dec.max().item())
+
         B = x_batch.size(0)
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
         y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
@@ -284,9 +303,11 @@ for epoch in range(epochs):
         preds = logits.argmax(dim=1)
         correct_total += (preds == y_target).sum().item()
         sample_total += y_target.numel()
+        break
 
     epoch_accuracy = (correct_total / sample_total) * 100
     print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%")
+    break
 
 torch.save(model.state_dict(), 'mnist_vit_4_enc_dec.pth')
 
