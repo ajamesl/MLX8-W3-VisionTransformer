@@ -10,13 +10,13 @@ import math
 from tqdm import tqdm
 
 # --- Config ---
-batch_size = 64
+batch_size = 32
 epochs = 20
-learning_rate = 1e-3
+learning_rate = 7e-4
 patch_size = 16
 embed_dim = 64
-num_heads = 4
-num_layers = 4
+num_heads = 8
+num_layers = 8
 num_classes = 10
 img_size = 256
 data_path = "./data"
