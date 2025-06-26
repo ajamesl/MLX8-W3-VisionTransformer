@@ -245,7 +245,7 @@ def collate_fn(batch):
     return x_batch, y_padded, y_lens
 
 # --- Build Custom Dataset and DataLoader ---
-train_dataset_stitch = CustomMNISTDataset(train_dataset, length=360000)
+train_dataset_stitch = CustomMNISTDataset(train_dataset, length=300000)
 train_loader_stitch = DataLoader(train_dataset_stitch, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
 
 test_dataset_stitch = CustomMNISTDataset(test_dataset, length=50000)
