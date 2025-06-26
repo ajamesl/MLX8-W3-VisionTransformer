@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 # --- Config ---
 batch_size = 64
-epochs = 12
+epochs = 20
 learning_rate = 1e-3
 patch_size = 16
 embed_dim = 64
@@ -326,7 +326,7 @@ model = VisualTransformer(
 ).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-scheduler = MultiStepLR(optimizer, milestones=[10], gamma=0.1)
+scheduler = MultiStepLR(optimizer, milestones=[15], gamma=0.1)
 loss_fn = nn.CrossEntropyLoss(ignore_index=12)  # 12 is the padding index for y_padded
 
 # --- Training Loop ---
