@@ -46,7 +46,7 @@ def stitch_and_resize(images, labels, out_size=img_size):
     # Extract the label from each image and append in order of image selection
     labels = torch.tensor(labels)  # (N,)
     N = len(images)
-    grid_size = math.ceil(sqrt(N))
+    grid_size = math.ceil(math.sqrt(N))
     pad_needed = grid_size**2 - N
     if pad_needed > 0:
         blank = torch.zeros((28, 28), dtype=images.dtype, device=images.device)
@@ -83,7 +83,7 @@ class CustomMNISTDataset(torch.utils.data.Dataset):
         # Get images and labels from the dataset
         imgs, labels = zip(*(self.mnist_dataset[i.item()] for i in idxs))
         images = torch.stack(imgs)
-        stitched_image, stitched_label = stitch_and_resize(imgs, labels)
+        stitched_image, stitched_label = stitch_and_resize(images, labels)
         return stitched_image, stitched_label
 
 # --- Patch Embedding ---
@@ -183,7 +183,7 @@ class VisualTransformer(nn.Module):
         self.head = nn.Linear(embed_dim, num_classes)
 
         self.seq_len = seq_len
-        self.vocab_size = num_classes + 1   # +1 for start token
+        self.vocab_size = num_classes + 2   # +1 for start token
         self.tok_embed = nn.Embedding(self.vocab_size, embed_dim)
         self.pos_encod_dec = nn.Parameter(torch.zeros(1, seq_len, embed_dim))
         nn.init.trunc_normal_(self.pos_encod_dec, std=0.02)
@@ -241,7 +241,7 @@ def collate_fn(batch):
     x_seqs, y_seqs = zip(*batch)
     y_lens = [y.shape[0] for y in y_seqs]
     x_batch = torch.stack(x_seqs)
-    y_padded = pad_sequence(y_seqs, batch_first=True, padding_value=12)
+    y_padded = pad_sequence(y_seqs, batch_first=True, padding_value=11)
     return x_batch, y_padded, y_lens
 
 # --- Build Custom Dataset and DataLoader ---
@@ -269,7 +269,7 @@ loss_fn = nn.CrossEntropyLoss(ignore_index=12)  # 12 is the padding index for y_
 for epoch in range(epochs):
     correct_total, sample_total = 0, 0
     model.train()
-    for x_batch, y_batch in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
+    for x_batch, y_batch, y_lens in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
         B = x_batch.size(0)
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
