@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from tqdm import tqdm
+import wandb
 
 # --- Config ---
 batch_size = 128
@@ -13,6 +14,7 @@ embed_dim = 64
 num_heads = 4
 num_layers = 3
 num_classes = 10
+img_size = 28
 data_path = "./data"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -35,7 +37,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Patch Embedding ---
 class PatchEmbed(nn.Module):
-    def __init__(self, patch_size=7, embed_dim=64, img_size=28, in_chans=1):
+    def __init__(self, patch_size=patch_size, embed_dim=embed_dim, img_size=img_size, in_chans=1):
         super().__init__()
         num_patches = (img_size // patch_size) ** 2
         self.patch_size = patch_size
@@ -157,8 +159,6 @@ for epoch in range(epochs):
     print(
         f"Epoch {epoch + 1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%"
     )
-
-torch.save(model.state_dict(), "mnist_vit_encoder.pth")
 
 
 def evaluate(model, data_loader):
