@@ -123,7 +123,7 @@ sweep_config = {
     'parameters': {
         'learning_rate': {'distribution': 'uniform', 'min': 0.0001, 'max': 0.005},
         'batch_size': {'values': [64, 128]},
-        'num_heads': {'values': [2, 4, 6]},
+        'num_heads': {'values': [2, 4, 8]},
         'num_layers': {'values': [2, 4, 6]},
         'embed_dim': {'values': [64, 128]},
         'epochs': {'value': 10},
