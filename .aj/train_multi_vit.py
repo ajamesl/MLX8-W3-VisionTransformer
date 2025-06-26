@@ -82,6 +82,7 @@ class CustomMNISTDataset(torch.utils.data.Dataset):
         idxs = torch.randint(0, len(self.mnist_dataset), (num,)) # Random indices
         # Get images and labels from the dataset
         imgs, labels = zip(*(self.mnist_dataset[i.item()] for i in idxs))
+        labels = list(labels) + [11]
         images = torch.stack(imgs)
         stitched_image, stitched_label = stitch_and_resize(images, labels)
         return stitched_image, stitched_label
@@ -168,7 +169,7 @@ class DecoderBlock(nn.Module):
     
 # --- Visual Transformer ---
 class VisualTransformer(nn.Module):
-    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=img_size, in_chans=1, seq_len=10):
+    def __init__(self, patch_size, embed_dim, num_heads, num_layers, num_classes, img_size=img_size, in_chans=1, seq_len=11):
         super().__init__()
         self.patch_embed = PatchEmbed(patch_size, embed_dim, img_size, in_chans)
         num_patches = (img_size // patch_size) ** 2
@@ -183,7 +184,7 @@ class VisualTransformer(nn.Module):
         self.head = nn.Linear(embed_dim, num_classes)
 
         self.seq_len = seq_len
-        self.vocab_size = num_classes + 2   # +1 for start token
+        self.vocab_size = num_classes + 3   # +1 for start token
         self.tok_embed = nn.Embedding(self.vocab_size, embed_dim)
         self.pos_encod_dec = nn.Parameter(torch.zeros(1, seq_len, embed_dim))
         nn.init.trunc_normal_(self.pos_encod_dec, std=0.02)
@@ -241,7 +242,7 @@ def collate_fn(batch):
     x_seqs, y_seqs = zip(*batch)
     y_lens = [y.shape[0] for y in y_seqs]
     x_batch = torch.stack(x_seqs)
-    y_padded = pad_sequence(y_seqs, batch_first=True, padding_value=11)
+    y_padded = pad_sequence(y_seqs, batch_first=True, padding_value=12)
     return x_batch, y_padded, y_lens
 
 # --- Build Custom Dataset and DataLoader ---
