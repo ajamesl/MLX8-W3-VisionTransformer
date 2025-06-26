@@ -397,11 +397,9 @@ for epoch in range(epochs):
     epoch_seq_accuracy = (seq_correct / seq_total) * 100
     print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Token Acc: {epoch_token_accuracy:.2f}% | Seq Acc: {epoch_seq_accuracy:.2f}%")
     
-
-    if epoch % 2 == 0:
-        print("Sample ground truth and prediction:")
-        print("GT:", y_batch[0].cpu().tolist())
-        print("PR:", preds_seq[0].cpu().tolist())
+    print("Sample ground truth and prediction:")
+    print("GT:", y_batch[0].cpu().tolist())
+    print("PR:", preds_seq[0].cpu().tolist())
 
 torch.save(model.state_dict(), 'mnist_vit_multi_final.pth')
 
