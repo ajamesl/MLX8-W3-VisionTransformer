@@ -112,7 +112,7 @@ class CustomMNISTDataset(torch.utils.data.Dataset):
         imgs, labels = zip(*(self.mnist_dataset[i.item()] for i in idxs))
         images = torch.stack(imgs)
         stitched_image, stitched_label = stitch_and_resize(images, labels)
-        stitched_labels = torch.cat([stitched_labels, torch.tensor([11], device=stitched_labels.device, dtype=stitched_labels.dtype)])
+        stitched_label = torch.cat([stitched_label, torch.tensor([11], device=stitched_label.device, dtype=stitched_label.dtype)])
         return stitched_image, stitched_label
 
 # --- Patch Embedding ---
