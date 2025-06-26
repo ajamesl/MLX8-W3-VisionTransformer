@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import torchvision.transforms.functional as TF
+from torchvision.transforms import InterpolationMode
 from torch.nn.utils.rnn import pad_sequence
 import random
 import math
@@ -53,17 +54,46 @@ def stitch_and_resize(images, labels, out_size=img_size):
         # Add pad_needed blank images to fill the grid
         images = torch.cat([images, blank.unsqueeze(0).repeat(pad_needed, 1, 1)], dim=0)
 
+    # ---- Perturb each digit before arranging ----
+    perturbed_imgs = []
+    for img in images:
+        pil_img = TF.to_pil_image(img.cpu())
+
+        angle = random.uniform(-45, 45)    # mild rotation, less artifacting
+        scale = random.uniform(0.33, 1.2)  # only shrink, never enlarge out of bounds
+        max_trans = 5
+        translate_x = random.randint(-max_trans, max_trans)
+        translate_y = random.randint(-max_trans, max_trans)
+
+        perturbed = TF.affine(
+            pil_img,
+            angle=angle,
+            translate=(0, 0),
+            scale=scale,
+            shear=[0.0, 0.0],
+            interpolation=InterpolationMode.NEAREST,  # <--- Key change!
+            fill=0,
+        )
+        perturbed = TF.to_tensor(perturbed).squeeze(0)
+        # Center crop if needed
+        if perturbed.shape[-2:] != (28, 28):
+            perturbed = TF.center_crop(perturbed, (28, 28))
+        perturbed_imgs.append(perturbed.to(img.device))
+
+    perturbed_imgs = torch.stack(perturbed_imgs)
+
     rows = []
     for r in range(grid_size):
-        row_imgs = images[r*grid_size:(r+1)*grid_size]  # shape: (cols, 28, 28)
+        row_imgs = perturbed_imgs[r*grid_size:(r+1)*grid_size]  # shape: (cols, 28, 28)
         row_cat = torch.cat(list(row_imgs), dim=1)      # concat horizontally
         rows.append(row_cat)
     
     # Concatenate all rows vertically
     stitched = torch.cat(rows, dim=0).unsqueeze(0)   # vertical, shape: (1, H, W)
-
+    mnist_mean, mnist_std = 0.1307, 0.3081
     # Now resize to (1, out_size, out_size)
     stitched_resized = TF.resize(stitched, [out_size, out_size])
+    stitched_resized = (stitched_resized - mnist_mean) / mnist_std
     return stitched_resized, labels
 
 # --- Custom Dataset ---
@@ -217,59 +247,26 @@ class VisualTransformer(nn.Module):
 
 def evaluate(model, data_loader):
     model.eval()
-    correct_tokens, total_tokens = 0, 0
-    correct_seqs, total_seqs = 0, 0
-    pad_token = 12
-    eos_token = 11
-    start_token = 10
-
+    correct, total = 0, 0
     with torch.no_grad():
-        for x, y, y_lens in data_loader:
+        for x, y in data_loader:
             x, y = x.to(device), y.to(device)
-            B, seq_len = y.shape
+            B = x.size(0)
+            start_toks = torch.full((B, 1), 10, dtype=y.dtype, device=y.device)
+            y_inp = torch.cat([start_toks, y[:, :-1]], dim=1)
+            y_tar = y.clone() # (B, seq_len)
+            logits = model(x, y_inp)
 
-            # Greedy decoding with start token
-            y_input = torch.full((B, 1), start_token, dtype=torch.long, device=device)
-            preds = []
+            voc_size = logits.size(-1)
+            logits = logits.reshape(-1, voc_size) # (B * seq_len, vocab_size)
+            y_tar = y_tar.reshape(-1) # (B * seq_len)
+            preds = logits.argmax(dim=1)
+            mask = y_tar != 12  # Ignore padding index
+            correct += (preds[mask] == y_tar[mask]).sum().item()
+            total += mask.sum().item()
 
-            for t in range(seq_len):
-                out = model(x, y_input)  # (B, t+1, vocab_size)
-                next_token = out[:, -1, :].argmax(dim=-1, keepdim=True)  # (B, 1)
-                preds.append(next_token)
-                y_input = torch.cat([y_input, next_token], dim=1)
-                # Optional: break if all seqs have EOS (can add optimization)
-
-            preds = torch.cat(preds, dim=1)  # (B, seq_len)
-
-            # --- Per-token accuracy: ignore PAD in target ---
-            mask = (y != pad_token)
-            correct_tokens += (preds[mask] == y[mask]).sum().item()
-            total_tokens += mask.sum().item()
-
-            # --- Per-sequence accuracy (all tokens up to EOS or PAD must match) ---
-            for i in range(B):
-                # Get reference (ground truth) up to EOS or PAD
-                gt_seq = []
-                for tok in y[i].tolist():
-                    if tok == eos_token or tok == pad_token:
-                        break
-                    gt_seq.append(tok)
-                # Get prediction up to EOS or PAD
-                pred_seq = []
-                for tok in preds[i].tolist():
-                    if tok == eos_token or tok == pad_token:
-                        break
-                    pred_seq.append(tok)
-                # Compare full sequence
-                if pred_seq == gt_seq:
-                    correct_seqs += 1
-                total_seqs += 1
-
-    token_acc = 100 * correct_tokens / total_tokens if total_tokens else 0
-    seq_acc = 100 * correct_seqs / total_seqs if total_seqs else 0
-
-    print(f"Token Accuracy: {token_acc:.2f}% | Sequence Accuracy: {seq_acc:.2f}%")
-    return token_acc, seq_acc
+    accuracy = 100 * correct / total
+    return accuracy
 
 def collate_fn(batch):
     x_seqs, y_seqs = zip(*batch)
@@ -302,7 +299,6 @@ loss_fn = nn.CrossEntropyLoss(ignore_index=12)  # 12 is the padding index for y_
 # --- Training Loop ---
 for epoch in range(epochs):
     correct_total, sample_total = 0, 0
-    seq_correct, seq_total = 0, 0
     model.train()
     for x_batch, y_batch, y_lens in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
@@ -326,34 +322,11 @@ for epoch in range(epochs):
         correct_total += (preds[mask] == y_target[mask]).sum().item()
         sample_total += mask.sum().item()
 
-        # --- SEQ ACCURACY BLOCK ---
-        # Reshape for per-sequence checks
-        preds_seq = preds.view(B, -1)
-        y_target_seq = y_batch
-        eos_token = 11
-        pad_token = 12
-        for i in range(B):
-            # Extract predicted sequence up to EOS/PAD
-            pred_digits = []
-            for tok in preds_seq[i].tolist():
-                if tok == eos_token or tok == pad_token:
-                    break
-                pred_digits.append(tok)
-            # Ground truth sequence up to EOS/PAD
-            true_digits = []
-            for tok in y_target_seq[i].tolist():
-                if tok == eos_token or tok == pad_token:
-                    break
-                true_digits.append(tok)
-            if pred_digits == true_digits:
-                seq_correct += 1
-            seq_total += 1
+    epoch_accuracy = (correct_total / sample_total) * 100
+    print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%")
 
-    epoch_token_accuracy = (correct_total / sample_total) * 100
-    epoch_seq_accuracy = (seq_correct / seq_total) * 100
-    print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Token Acc: {epoch_token_accuracy:.2f}% | Seq Acc: {epoch_seq_accuracy:.2f}%")
-
-torch.save(model.state_dict(), 'mnist_vit_multi_stitch.pth')
+torch.save(model.state_dict(), 'mnist_vit_multi_stitch_pert.pth')
 
 # After training:
 test_accuracy = evaluate(model, test_loader_stitch)
+print(f"Test Accuracy: {test_accuracy:.2f}%")
