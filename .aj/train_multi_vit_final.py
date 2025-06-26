@@ -90,7 +90,7 @@ def stitch_and_resize(images, labels, out_size=img_size, min_scale=1.25, max_sca
         row_sorted = sorted(row, key=lambda t: t[0])
         centers_ordered.extend(row_sorted)
     sorted_labels = torch.tensor([label for _, _, label in centers_ordered], dtype=labels.dtype, device=labels.device)
-
+    sorted_labels.append(11)  # Add EOS at end
     stitched = canvas.unsqueeze(0)
     return stitched, sorted_labels
 
@@ -111,9 +111,9 @@ class CustomMNISTDataset(torch.utils.data.Dataset):
         idxs = torch.randint(0, len(self.mnist_dataset), (num,)) # Random indices
         # Get images and labels from the dataset
         imgs, labels = zip(*(self.mnist_dataset[i.item()] for i in idxs))
-        labels = list(labels) + [11]
         images = torch.stack(imgs)
         stitched_image, stitched_label = stitch_and_resize(images, labels)
+
         return stitched_image, stitched_label
 
 # --- Patch Embedding ---
