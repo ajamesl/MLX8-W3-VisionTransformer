@@ -10,7 +10,7 @@ import math
 from tqdm import tqdm
 
 # --- Config ---
-batch_size = 32
+batch_size = 64
 epochs = 20
 learning_rate = 7e-4
 patch_size = 16
