@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import torchvision.transforms.functional as TF
 from torch.nn.utils.rnn import pad_sequence
-from torch.optim.lr_scheduler import MultiStepLR
+from torch.optim.lr_scheduler import LambdaLR
 import random
 import math
 from tqdm import tqdm
@@ -15,8 +15,8 @@ epochs = 20
 learning_rate = 7e-4
 patch_size = 16
 embed_dim = 64
-num_heads = 8
-num_layers = 8
+num_heads = 4
+num_layers = 4
 num_classes = 10
 img_size = 256
 data_path = "./data"
@@ -307,6 +307,15 @@ def collate_fn(batch):
     y_padded = pad_sequence(y_seqs, batch_first=True, padding_value=12)
     return x_batch, y_padded, y_lens
 
+def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, num_cycles=0.5, last_epoch=-1):
+    def lr_lambda(current_step):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        # Cosine decay after warmup
+        progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        return max(0.0, 0.5 * (1.0 + math.cos(math.pi * num_cycles * 2.0 * progress)))
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
+
 # --- Build Custom Dataset and DataLoader ---
 train_dataset_stitch = CustomMNISTDataset(train_dataset, length=300000)
 train_loader_stitch = DataLoader(train_dataset_stitch, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers=2, pin_memory=True)
@@ -325,8 +334,12 @@ model = VisualTransformer(
     img_size=img_size,
 ).to(device)
 
+steps_per_epoch = len(train_loader_stitch)
+total_steps = epochs * steps_per_epoch
+warmup_steps = int(0.1 * total_steps)   # 10% of steps for warmup (adjustable)
+
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-scheduler = MultiStepLR(optimizer, milestones=[15], gamma=0.1)
+scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
 loss_fn = nn.CrossEntropyLoss(ignore_index=12)  # 12 is the padding index for y_padded
 
 # --- Training Loop ---
@@ -350,6 +363,7 @@ for epoch in range(epochs):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         preds = logits.argmax(dim=1)
         mask = y_target != 12
@@ -382,7 +396,12 @@ for epoch in range(epochs):
     epoch_token_accuracy = (correct_total / sample_total) * 100
     epoch_seq_accuracy = (seq_correct / seq_total) * 100
     print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Token Acc: {epoch_token_accuracy:.2f}% | Seq Acc: {epoch_seq_accuracy:.2f}%")
-    scheduler.step()
+    
+
+    if epoch % 2 == 0:
+        print("Sample ground truth and prediction:")
+        print("GT:", y_batch[0].cpu().tolist())
+        print("PR:", preds_seq[0].cpu().tolist())
 
 torch.save(model.state_dict(), 'mnist_vit_multi_final.pth')
 
