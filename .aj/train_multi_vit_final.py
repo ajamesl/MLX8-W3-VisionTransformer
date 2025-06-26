@@ -3,20 +3,20 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import torchvision.transforms.functional as TF
-from torchvision.transforms import InterpolationMode
 from torch.nn.utils.rnn import pad_sequence
+from torch.optim.lr_scheduler import MultiStepLR
 import random
 import math
 from tqdm import tqdm
 
 # --- Config ---
-batch_size = 128
-epochs = 10
+batch_size = 64
+epochs = 12
 learning_rate = 1e-3
 patch_size = 16
 embed_dim = 64
 num_heads = 4
-num_layers = 3
+num_layers = 4
 num_classes = 10
 img_size = 256
 data_path = "./data"
@@ -24,77 +24,74 @@ data_path = "./data"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- Dataset & Loader ---
-# transform = transforms.Compose([
-#         transforms.ToTensor(),
-#         transforms.Normalize((0.1307,), (0.3081,))
-#     ])
+transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
 
-train_dataset = datasets.MNIST(root=data_path, train=True, download=False, transform=transforms.ToTensor())
+train_dataset = datasets.MNIST(root=data_path, train=True, download=False, transform=transform)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-test_dataset = datasets.MNIST(root=data_path, train=False, download=False, transform=transforms.ToTensor())
+test_dataset = datasets.MNIST(root=data_path, train=False, download=False, transform=transform)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Image Stitching ---
 def stitch_and_resize(images, labels, out_size=img_size):
-    """
-    images: Tensor of shape (N, 1, 28, 28)
-    labels: Tensor of N integers representing the labels of the images
-    Returns: Tensor of shape (1, out_size, out_size) and a tensor of labels of shape (N,)
-    """
-    # Squeeze channel for concatenation
-    images = images.squeeze(1)  # (N, 28, 28)
-    # Extract the label from each image and append in order of image selection
-    labels = torch.tensor(labels)  # (N,)
+    images = images.squeeze(1)
+    labels = torch.tensor(labels)
     N = len(images)
-    grid_size = math.ceil(math.sqrt(N))
-    pad_needed = grid_size**2 - N
-    if pad_needed > 0:
-        blank = torch.zeros((28, 28), dtype=images.dtype, device=images.device)
-        # Add pad_needed blank images to fill the grid
-        images = torch.cat([images, blank.unsqueeze(0).repeat(pad_needed, 1, 1)], dim=0)
+    digit_size = images.shape[-1]
 
-    # ---- Perturb each digit before arranging ----
-    perturbed_imgs = []
-    for img in images:
-        pil_img = TF.to_pil_image(img.cpu())
+    canvas = torch.zeros((out_size, out_size), dtype=images.dtype, device=images.device)
+    occupied_mask = torch.zeros((out_size, out_size), dtype=torch.bool, device=images.device)
+    centers = []
 
-        angle = random.uniform(-45, 45)    # mild rotation, less artifacting
-        scale = random.uniform(0.5, 1.2)  # only shrink, never enlarge out of bounds
-        max_trans = 5
-        translate_x = random.randint(-max_trans, max_trans)
-        translate_y = random.randint(-max_trans, max_trans)
+    max_attempts = 100
+    for i in range(N):
+        placed = False
+        for _ in range(max_attempts):
+            x = random.randint(0, out_size - digit_size)
+            y = random.randint(0, out_size - digit_size)
+            region = occupied_mask[y:y+digit_size, x:x+digit_size]
+            if not region.any():
+                canvas[y:y+digit_size, x:x+digit_size] = images[i]
+                occupied_mask[y:y+digit_size, x:x+digit_size] = True
+                center_x = x + digit_size // 2
+                center_y = y + digit_size // 2
+                centers.append((center_x, center_y, labels[i].item()))
+                placed = True
+                break
+        if not placed:
+            raise RuntimeError(f"Could not place digit {i} after {max_attempts} attempts. Try fewer digits.")
 
-        perturbed = TF.affine(
-            pil_img,
-            angle=angle,
-            translate=(0, 0),
-            scale=scale,
-            shear=[0.0, 0.0],
-            interpolation=InterpolationMode.NEAREST,  # <--- Key change!
-            fill=0,
-        )
-        perturbed = TF.to_tensor(perturbed).squeeze(0)
-        # Center crop if needed
-        if perturbed.shape[-2:] != (28, 28):
-            perturbed = TF.center_crop(perturbed, (28, 28))
-        perturbed_imgs.append(perturbed.to(img.device))
-
-    perturbed_imgs = torch.stack(perturbed_imgs)
-
+    # Improved row grouping
+    centers = sorted(centers, key=lambda t: t[1])  # sort by y
     rows = []
-    for r in range(grid_size):
-        row_imgs = perturbed_imgs[r*grid_size:(r+1)*grid_size]  # shape: (cols, 28, 28)
-        row_cat = torch.cat(list(row_imgs), dim=1)      # concat horizontally
-        rows.append(row_cat)
-    
-    # Concatenate all rows vertically
-    stitched = torch.cat(rows, dim=0).unsqueeze(0)   # vertical, shape: (1, H, W)
-    mnist_mean, mnist_std = 0.1307, 0.3081
-    # Now resize to (1, out_size, out_size)
-    stitched_resized = TF.resize(stitched, [out_size, out_size])
-    stitched_resized = (stitched_resized - mnist_mean) / mnist_std
-    return stitched_resized, labels
+    row = [centers[0]]
+    row_y = centers[0][1]
+    row_height_thresh = int(digit_size * 0.8)  # Tunable: tighter or looser row
+    for c in centers[1:]:
+        # Compare to average y of current row
+        avg_y = sum([d[1] for d in row]) / len(row)
+        if abs(c[1] - avg_y) <= row_height_thresh:
+            row.append(c)
+        else:
+            rows.append(row)
+            row = [c]
+    if row:
+        rows.append(row)
+
+    # Now, sort all rows by average y (top-to-bottom)
+    rows = sorted(rows, key=lambda r: sum([d[1] for d in r]) / len(r))
+    centers_ordered = []
+    for row in rows:
+        row_sorted = sorted(row, key=lambda t: t[0])
+        centers_ordered.extend(row_sorted)
+    sorted_labels = torch.tensor([label for _, _, label in centers_ordered], dtype=labels.dtype, device=labels.device)
+
+    stitched = canvas.unsqueeze(0)
+    return stitched, sorted_labels
+
 
 # --- Custom Dataset ---
 class CustomMNISTDataset(torch.utils.data.Dataset):
@@ -247,26 +244,59 @@ class VisualTransformer(nn.Module):
 
 def evaluate(model, data_loader):
     model.eval()
-    correct, total = 0, 0
+    correct_tokens, total_tokens = 0, 0
+    correct_seqs, total_seqs = 0, 0
+    pad_token = 12
+    eos_token = 11
+    start_token = 10
+
     with torch.no_grad():
-        for x, y in data_loader:
+        for x, y, y_lens in data_loader:
             x, y = x.to(device), y.to(device)
-            B = x.size(0)
-            start_toks = torch.full((B, 1), 10, dtype=y.dtype, device=y.device)
-            y_inp = torch.cat([start_toks, y[:, :-1]], dim=1)
-            y_tar = y.clone() # (B, seq_len)
-            logits = model(x, y_inp)
+            B, seq_len = y.shape
 
-            voc_size = logits.size(-1)
-            logits = logits.reshape(-1, voc_size) # (B * seq_len, vocab_size)
-            y_tar = y_tar.reshape(-1) # (B * seq_len)
-            preds = logits.argmax(dim=1)
-            mask = y_tar != 12  # Ignore padding index
-            correct += (preds[mask] == y_tar[mask]).sum().item()
-            total += mask.sum().item()
+            # Greedy decoding with start token
+            y_input = torch.full((B, 1), start_token, dtype=torch.long, device=device)
+            preds = []
 
-    accuracy = 100 * correct / total
-    return accuracy
+            for t in range(seq_len):
+                out = model(x, y_input)  # (B, t+1, vocab_size)
+                next_token = out[:, -1, :].argmax(dim=-1, keepdim=True)  # (B, 1)
+                preds.append(next_token)
+                y_input = torch.cat([y_input, next_token], dim=1)
+                # Optional: break if all seqs have EOS (can add optimization)
+
+            preds = torch.cat(preds, dim=1)  # (B, seq_len)
+
+            # --- Per-token accuracy: ignore PAD in target ---
+            mask = (y != pad_token)
+            correct_tokens += (preds[mask] == y[mask]).sum().item()
+            total_tokens += mask.sum().item()
+
+            # --- Per-sequence accuracy (all tokens up to EOS or PAD must match) ---
+            for i in range(B):
+                # Get reference (ground truth) up to EOS or PAD
+                gt_seq = []
+                for tok in y[i].tolist():
+                    if tok == eos_token or tok == pad_token:
+                        break
+                    gt_seq.append(tok)
+                # Get prediction up to EOS or PAD
+                pred_seq = []
+                for tok in preds[i].tolist():
+                    if tok == eos_token or tok == pad_token:
+                        break
+                    pred_seq.append(tok)
+                # Compare full sequence
+                if pred_seq == gt_seq:
+                    correct_seqs += 1
+                total_seqs += 1
+
+    token_acc = 100 * correct_tokens / total_tokens if total_tokens else 0
+    seq_acc = 100 * correct_seqs / total_seqs if total_seqs else 0
+
+    print(f"Token Accuracy: {token_acc:.2f}% | Sequence Accuracy: {seq_acc:.2f}%")
+    return token_acc, seq_acc
 
 def collate_fn(batch):
     x_seqs, y_seqs = zip(*batch)
@@ -277,10 +307,10 @@ def collate_fn(batch):
 
 # --- Build Custom Dataset and DataLoader ---
 train_dataset_stitch = CustomMNISTDataset(train_dataset, length=300000)
-train_loader_stitch = DataLoader(train_dataset_stitch, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+train_loader_stitch = DataLoader(train_dataset_stitch, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers=2, pin_memory=True)
 
 test_dataset_stitch = CustomMNISTDataset(test_dataset, length=50000)
-test_loader_stitch = DataLoader(test_dataset_stitch, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+test_loader_stitch = DataLoader(test_dataset_stitch, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=2, pin_memory=True)
 
 
 # --- Instantiate Model ---
@@ -294,11 +324,13 @@ model = VisualTransformer(
 ).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+scheduler = MultiStepLR(optimizer, milestones=[10], gamma=0.1)
 loss_fn = nn.CrossEntropyLoss(ignore_index=12)  # 12 is the padding index for y_padded
 
 # --- Training Loop ---
 for epoch in range(epochs):
     correct_total, sample_total = 0, 0
+    seq_correct, seq_total = 0, 0
     model.train()
     for x_batch, y_batch, y_lens in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
@@ -322,11 +354,35 @@ for epoch in range(epochs):
         correct_total += (preds[mask] == y_target[mask]).sum().item()
         sample_total += mask.sum().item()
 
-    epoch_accuracy = (correct_total / sample_total) * 100
-    print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%")
+        # --- SEQ ACCURACY BLOCK ---
+        # Reshape for per-sequence checks
+        preds_seq = preds.view(B, -1)
+        y_target_seq = y_batch
+        eos_token = 11
+        pad_token = 12
+        for i in range(B):
+            # Extract predicted sequence up to EOS/PAD
+            pred_digits = []
+            for tok in preds_seq[i].tolist():
+                if tok == eos_token or tok == pad_token:
+                    break
+                pred_digits.append(tok)
+            # Ground truth sequence up to EOS/PAD
+            true_digits = []
+            for tok in y_target_seq[i].tolist():
+                if tok == eos_token or tok == pad_token:
+                    break
+                true_digits.append(tok)
+            if pred_digits == true_digits:
+                seq_correct += 1
+            seq_total += 1
 
-torch.save(model.state_dict(), 'mnist_vit_multi_stitch_pert.pth')
+    epoch_token_accuracy = (correct_total / sample_total) * 100
+    epoch_seq_accuracy = (seq_correct / seq_total) * 100
+    print(f"Epoch {epoch+1}: Loss {loss.item():.4f} | Token Acc: {epoch_token_accuracy:.2f}% | Seq Acc: {epoch_seq_accuracy:.2f}%")
+    scheduler.step()
+
+torch.save(model.state_dict(), 'mnist_vit_multi_final.pth')
 
 # After training:
 test_accuracy = evaluate(model, test_loader_stitch)
-print(f"Test Accuracy: {test_accuracy:.2f}%")
