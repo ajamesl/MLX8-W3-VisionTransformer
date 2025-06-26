@@ -36,11 +36,10 @@ test_dataset = datasets.MNIST(root=data_path, train=False, download=False, trans
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Image Stitching ---
-def stitch_and_resize(images, labels, out_size=img_size):
+def stitch_and_resize(images, labels, out_size=img_size, min_scale=0.75, max_scale=2):
     images = images.squeeze(1)
     labels = torch.tensor(labels)
     N = len(images)
-    digit_size = images.shape[-1]
 
     canvas = torch.zeros((out_size, out_size), dtype=images.dtype, device=images.device)
     occupied_mask = torch.zeros((out_size, out_size), dtype=torch.bool, device=images.device)
@@ -48,30 +47,34 @@ def stitch_and_resize(images, labels, out_size=img_size):
 
     max_attempts = 100
     for i in range(N):
+        scale = random.uniform(min_scale, max_scale)
+        orig_digit_size = images[i].shape[-1]
+        new_digit_size = int(orig_digit_size * scale)
+        new_digit_size = max(8, min(new_digit_size, out_size))  # avoid too small or too big
+        digit_resized = TF.resize(images[i].unsqueeze(0), [new_digit_size, new_digit_size]).squeeze(0)
+        
         placed = False
         for _ in range(max_attempts):
-            x = random.randint(0, out_size - digit_size)
-            y = random.randint(0, out_size - digit_size)
-            region = occupied_mask[y:y+digit_size, x:x+digit_size]
+            x = random.randint(0, out_size - new_digit_size)
+            y = random.randint(0, out_size - new_digit_size)
+            region = occupied_mask[y:y+new_digit_size, x:x+new_digit_size]
             if not region.any():
-                canvas[y:y+digit_size, x:x+digit_size] = images[i]
-                occupied_mask[y:y+digit_size, x:x+digit_size] = True
-                center_x = x + digit_size // 2
-                center_y = y + digit_size // 2
+                canvas[y:y+new_digit_size, x:x+new_digit_size] = digit_resized
+                occupied_mask[y:y+new_digit_size, x:x+new_digit_size] = True
+                center_x = x + new_digit_size // 2
+                center_y = y + new_digit_size // 2
                 centers.append((center_x, center_y, labels[i].item()))
                 placed = True
                 break
         if not placed:
             raise RuntimeError(f"Could not place digit {i} after {max_attempts} attempts. Try fewer digits.")
 
-    # Improved row grouping
+    # Improved row grouping (same as before)
     centers = sorted(centers, key=lambda t: t[1])  # sort by y
     rows = []
     row = [centers[0]]
-    row_y = centers[0][1]
-    row_height_thresh = int(digit_size * 0.8)  # Tunable: tighter or looser row
+    row_height_thresh = int(28 * 0.8)  # you can set this relative to orig digit size or avg new size
     for c in centers[1:]:
-        # Compare to average y of current row
         avg_y = sum([d[1] for d in row]) / len(row)
         if abs(c[1] - avg_y) <= row_height_thresh:
             row.append(c)
@@ -81,7 +84,6 @@ def stitch_and_resize(images, labels, out_size=img_size):
     if row:
         rows.append(row)
 
-    # Now, sort all rows by average y (top-to-bottom)
     rows = sorted(rows, key=lambda r: sum([d[1] for d in r]) / len(r))
     centers_ordered = []
     for row in rows:
