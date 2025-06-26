@@ -24,15 +24,15 @@ data_path = "./data"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- Dataset & Loader ---
-transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
+# transform = transforms.Compose([
+#         transforms.ToTensor(),
+#         transforms.Normalize((0.1307,), (0.3081,))
+#     ])
 
-train_dataset = datasets.MNIST(root=data_path, train=True, download=False, transform=transform)
+train_dataset = datasets.MNIST(root=data_path, train=True, download=False, transform=transforms.ToTensor())
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-test_dataset = datasets.MNIST(root=data_path, train=False, download=False, transform=transform)
+test_dataset = datasets.MNIST(root=data_path, train=False, download=False, transform=transforms.ToTensor())
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Image Stitching ---
@@ -60,7 +60,7 @@ def stitch_and_resize(images, labels, out_size=img_size):
         pil_img = TF.to_pil_image(img.cpu())
 
         angle = random.uniform(-45, 45)    # mild rotation, less artifacting
-        scale = random.uniform(0.33, 1.2)  # only shrink, never enlarge out of bounds
+        scale = random.uniform(0.5, 1.2)  # only shrink, never enlarge out of bounds
         max_trans = 5
         translate_x = random.randint(-max_trans, max_trans)
         translate_y = random.randint(-max_trans, max_trans)
