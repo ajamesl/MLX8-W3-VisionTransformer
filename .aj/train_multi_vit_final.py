@@ -36,7 +36,7 @@ test_dataset = datasets.MNIST(root=data_path, train=False, download=False, trans
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Image Stitching ---
-def stitch_and_resize(images, labels, out_size=img_size, min_scale=0.75, max_scale=1.75):
+def stitch_and_resize(images, labels, out_size=img_size, min_scale=1.25, max_scale=1.75):
     images = images.squeeze(1)
     labels = torch.tensor(labels)
     N = len(images)
