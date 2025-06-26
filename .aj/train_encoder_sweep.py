@@ -24,16 +24,6 @@ transform = transforms.Compose(
     [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
 )
 
-train_dataset = datasets.MNIST(
-    root=data_path, train=True, download=False, transform=transform
-)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-test_dataset = datasets.MNIST(
-    root=data_path, train=False, download=False, transform=transform
-)
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
 
 # --- Patch Embedding ---
 class PatchEmbed(nn.Module):
@@ -127,54 +117,81 @@ class VisualTransformer(nn.Module):
         out = self.head(cls)  # (B, num_classes)
         return out
 
+sweep_config = {
+    'method': 'bayes',
+    'metric': {'name': 'loss', 'goal': 'minimize'},
+    'parameters': {
+        'learning_rate': {'distribution': 'uniform', 'min': 0.0001, 'max': 0.005},
+        'batch_size': {'values': [64, 128]},
+        'num_heads': {'values': [2, 4, 6]},
+        'num_layers': {'values': [2, 4, 6]},
+        'embed_dim': {'values': [64, 128]},
+        'epochs': {'value': 10},
+    }
+}
 
-# --- Instantiate Model ---
-model = VisualTransformer(
-    patch_size=patch_size,
-    embed_dim=embed_dim,
-    num_heads=num_heads,
-    num_layers=num_layers,
-    num_classes=num_classes,
-).to(device)
+sweep_id = wandb.sweep(sweep=sweep_config, project="vit-mnist", entity="mlx-aj")
 
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-loss_fn = nn.CrossEntropyLoss()
+def train():
+    run = wandb.init()
+    config = wandb.config
 
-# --- Training Loop ---
-for epoch in range(epochs):
-    correct_total, sample_total = 0, 0
-    model.train()
-    for x_batch, y_batch in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}"):
-        x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-        logits = model(x_batch)
-        loss = loss_fn(logits, y_batch)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    learning_rate = config.learning_rate
+    batch_size = config.batch_size
+    num_heads = config.num_heads
+    num_layers = config.num_layers
+    embed_dim = config.embed_dim
+    num_epochs = config.epochs
 
-        preds = logits.argmax(dim=1)
-        correct_total += (preds == y_batch).sum().item()
-        sample_total += len(y_batch)
-    epoch_accuracy = (correct_total / sample_total) * 100
-    print(
-        f"Epoch {epoch + 1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%"
+    # --- Instantiate Model ---
+    model = VisualTransformer(
+        patch_size=patch_size,
+        embed_dim=embed_dim,
+        num_heads=num_heads,
+        num_layers=num_layers,
+        num_classes=num_classes,
+    ).to(device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    loss_fn = nn.CrossEntropyLoss()
+
+    train_dataset = datasets.MNIST(
+        root=data_path, train=True, download=False, transform=transform
     )
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
+    # --- Training Loop ---
+    for epoch in range(num_epochs):
+        correct_total, sample_total, epoch_loss = 0, 0, 0
+        model.train()
+        for x_batch, y_batch in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}"):
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+            logits = model(x_batch)
+            loss = loss_fn(logits, y_batch)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-def evaluate(model, data_loader):
-    model.eval()
-    correct, total = 0, 0
-    with torch.no_grad():
-        for x, y in data_loader:
-            x, y = x.to(device), y.to(device)
-            logits = model(x)
             preds = logits.argmax(dim=1)
-            correct += (preds == y).sum().item()
-            total += len(y)
-    accuracy = 100 * correct / total
-    return accuracy
+            correct_total += (preds == y_batch).sum().item()
+            sample_total += len(y_batch)
+        epoch_accuracy = (correct_total / sample_total) * 100
+        print(
+            f"Epoch {epoch + 1}: Loss {loss.item():.4f} | Accuracy: {epoch_accuracy:.2f}%"
+        )
+        
+        epoch_loss += loss.item()
 
+        avg_epoch_loss = epoch_loss / len(train_loader)
 
-# After training:
-test_accuracy = evaluate(model, test_loader)
-print(f"Test Accuracy: {test_accuracy:.2f}%")
+        wandb.log({
+            "epoch": epoch + 1,
+            "loss": avg_epoch_loss,
+            "epoch accuracy": epoch_accuracy,
+        })
+
+    run.finish()
+
+# This launches the sweep agent, and will run as many runs as you want
+if __name__ == "__main__":
+    wandb.agent(sweep_id, train, count=20)   # or count=None for infinite runs
