@@ -164,7 +164,7 @@ class Head(nn.Module):
             print("[DEBUG][Head] mask values (unique):", mask.unique())
             if torch.isnan(mask.float()).any():
                 print("[ALERT][Head] mask contains NaNs!")
-            attn = attn.masked_fill(mask == False, float('-inf')) # (B, T, T)
+            attn = attn.masked_fill(mask == True, float('-inf')) # (B, T, T)
         attn = F.softmax(attn, dim=-1) # (B, T, T)
         out = attn @ v  # (B, T, T) @ (B, T, head_size) ---> (B, T, head_size)
         return out
