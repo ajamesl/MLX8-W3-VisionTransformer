@@ -45,7 +45,7 @@ def stitch_and_resize(images, labels, out_size=img_size, min_scale=1.2, max_scal
     occupied_mask = torch.zeros((out_size, out_size), dtype=torch.bool, device=images.device)
     centers = []
 
-    max_attempts = 300
+    max_attempts = 500
     for i in range(N):
         scale = random.uniform(min_scale, max_scale)
         orig_digit_size = images[i].shape[-1]
