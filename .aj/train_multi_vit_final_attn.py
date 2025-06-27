@@ -400,11 +400,11 @@ for epoch in range(epochs):
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
         y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
         y_target = y_batch.clone() # (B, seq_len)
+
+        logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
         print("[DEBUG][Train] logits min/max:", logits.min().item(), logits.max().item())
         if torch.isnan(logits).any() or torch.isinf(logits).any():
             print("[ALERT][Train] logits contain NaNs or infs!")
-
-        logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
 
         # Flatten loss & y_target to avoid loss not averaging across all tokens in all batches
         vocab_size = logits.size(-1)
