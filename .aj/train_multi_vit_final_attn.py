@@ -356,10 +356,10 @@ def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_st
 
 # --- Build Custom Dataset and DataLoader ---
 train_dataset_stitch = CustomMNISTDataset(train_dataset, length=300000)
-train_loader_stitch = DataLoader(train_dataset_stitch, batch_size=batch_size, shuffle=True, collate_fn=collate_fn) #, num_workers=2, pin_memory=True)
+train_loader_stitch = DataLoader(train_dataset_stitch, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers=2, pin_memory=True)
 
 test_dataset_stitch = CustomMNISTDataset(test_dataset, length=50000)
-test_loader_stitch = DataLoader(test_dataset_stitch, batch_size=batch_size, shuffle=False, collate_fn=collate_fn) #, num_workers=2, pin_memory=True)
+test_loader_stitch = DataLoader(test_dataset_stitch, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=2, pin_memory=True)
 
 
 # --- Instantiate Model ---
