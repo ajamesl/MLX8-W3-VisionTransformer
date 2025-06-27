@@ -36,7 +36,7 @@ test_dataset = datasets.MNIST(root=data_path, train=False, download=False, trans
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # --- Image Stitching ---
-def stitch_and_resize(images, labels, out_size=img_size, min_scale=1.25, max_scale=1.75):
+def stitch_and_resize(images, labels, out_size=img_size, min_scale=1.2, max_scale=1.7):
     images = images.squeeze(1)
     labels = torch.tensor(labels)
     N = len(images)
@@ -45,7 +45,7 @@ def stitch_and_resize(images, labels, out_size=img_size, min_scale=1.25, max_sca
     occupied_mask = torch.zeros((out_size, out_size), dtype=torch.bool, device=images.device)
     centers = []
 
-    max_attempts = 200
+    max_attempts = 300
     for i in range(N):
         scale = random.uniform(min_scale, max_scale)
         orig_digit_size = images[i].shape[-1]
