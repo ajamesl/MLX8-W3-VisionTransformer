@@ -1,0 +1,42 @@
+{
+  "os":  "macOS-15.4.1-arm64-arm-64bit",
+  "python":  "CPython 3.12.3",
+  "startedAt":  "2025-06-25T15:30:20.942391Z",
+  "program":  "/Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.venv/bin/pytest",
+  "codePath":  ".venv/bin/pytest",
+  "git":  {
+    "remote":  "https://github.com/ajamesl/MLX8-W3-VisionTransformer.git",
+    "commit":  "c15d7929eac6e5b4c85bf174612c6c4d6e02e759"
+  },
+  "email":  "benwbethell@gmail.com",
+  "root":  "/Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.bb",
+  "host":  "Benjamins-MacBook-Pro-2.local",
+  "executable":  "/Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.venv/bin/python3",
+  "cpu_count":  12,
+  "cpu_count_logical":  12,
+  "disk":  {
+    "/":  {
+      "total":  "994662584320",
+      "used":  "816842457088"
+    },
+    "/System/Volumes/Data":  {
+      "total":  "994662584320",
+      "used":  "816842457088"
+    }
+  },
+  "memory":  {
+    "total":  "34359738368"
+  },
+  "cpu":  {
+    "count":  12,
+    "countLogical":  12
+  },
+  "apple":  {
+    "name":  "Apple M2 Max",
+    "ecpuCores":  4,
+    "pcpuCores":  8,
+    "gpuCores":  30,
+    "memoryGb":  32,
+    "ramTotalBytes":  "34359738368"
+  }
+}

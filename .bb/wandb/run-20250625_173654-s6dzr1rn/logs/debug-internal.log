@@ -1,0 +1,16 @@
+{"time":"2025-06-25T17:36:54.533531+01:00","level":"INFO","msg":"stream: starting","core version":"0.20.1","symlink path":"/Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.bb/wandb/run-20250625_173654-s6dzr1rn/logs/debug-core.log"}
+{"time":"2025-06-25T17:36:54.802659+01:00","level":"INFO","msg":"stream: created new stream","id":"s6dzr1rn"}
+{"time":"2025-06-25T17:36:54.802698+01:00","level":"INFO","msg":"stream: started","id":"s6dzr1rn"}
+{"time":"2025-06-25T17:36:54.802712+01:00","level":"INFO","msg":"writer: Do: started","stream_id":"s6dzr1rn"}
+{"time":"2025-06-25T17:36:54.802732+01:00","level":"INFO","msg":"sender: started","stream_id":"s6dzr1rn"}
+{"time":"2025-06-25T17:36:54.802725+01:00","level":"INFO","msg":"handler: started","stream_id":"s6dzr1rn"}
+{"time":"2025-06-25T17:36:55.089694+01:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-06-25T17:40:43.40276+01:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-06-25T17:40:43.402814+01:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-06-25T17:40:43.977822+01:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-06-25T17:40:44.20916+01:00","level":"INFO","msg":"handler: operation stats","stats":{}}
+{"time":"2025-06-25T17:40:44.214274+01:00","level":"INFO","msg":"stream: closing","id":"s6dzr1rn"}
+{"time":"2025-06-25T17:40:44.214307+01:00","level":"INFO","msg":"handler: closed","stream_id":"s6dzr1rn"}
+{"time":"2025-06-25T17:40:44.214333+01:00","level":"INFO","msg":"writer: Close: closed","stream_id":"s6dzr1rn"}
+{"time":"2025-06-25T17:40:44.214345+01:00","level":"INFO","msg":"sender: closed","stream_id":"s6dzr1rn"}
+{"time":"2025-06-25T17:40:44.214688+01:00","level":"INFO","msg":"stream: closed","id":"s6dzr1rn"}

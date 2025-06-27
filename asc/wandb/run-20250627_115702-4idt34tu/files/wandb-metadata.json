@@ -1,0 +1,44 @@
+{
+  "os":  "macOS-15.4.1-arm64-arm-64bit",
+  "python":  "CPython 3.12.3",
+  "startedAt":  "2025-06-27T10:57:03.252788Z",
+  "program":  "/Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/asc/encoder_train.py",
+  "codePath":  "asc/encoder_train.py",
+  "git":  {
+    "remote":  "https://github.com/ajamesl/MLX8-W3-VisionTransformer.git",
+    "commit":  "f4772efe0ac4a4f462def6f1716453d9cc64f773"
+  },
+  "email":  "benwbethell@gmail.com",
+  "root":  "/Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/asc",
+  "host":  "Benjamins-MacBook-Pro-2.local",
+  "executable":  "/Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.venv/bin/python3",
+  "codePathLocal":  "encoder_train.py",
+  "cpu_count":  12,
+  "cpu_count_logical":  12,
+  "disk":  {
+    "/":  {
+      "total":  "994662584320",
+      "used":  "819646046208"
+    },
+    "/System/Volumes/Data":  {
+      "total":  "994662584320",
+      "used":  "819646046208"
+    }
+  },
+  "memory":  {
+    "total":  "34359738368"
+  },
+  "cpu":  {
+    "count":  12,
+    "countLogical":  12
+  },
+  "apple":  {
+    "name":  "Apple M2 Max",
+    "ecpuCores":  4,
+    "pcpuCores":  8,
+    "gpuCores":  30,
+    "memoryGb":  32,
+    "swapTotalBytes":  "2147483648",
+    "ramTotalBytes":  "34359738368"
+  }
+}

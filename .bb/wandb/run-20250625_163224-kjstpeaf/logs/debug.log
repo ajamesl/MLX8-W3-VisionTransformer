@@ -1,0 +1,22 @@
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_setup.py:_flush():81] Current SDK version is 0.20.1
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_setup.py:_flush():81] Configure stats pid to 6062
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_setup.py:_flush():81] Loading settings from /Users/benjipro/.config/wandb/settings
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_setup.py:_flush():81] Loading settings from /Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.bb/wandb/settings
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_init.py:setup_run_log_directory():703] Logging user logs to /Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.bb/wandb/run-20250625_163224-kjstpeaf/logs/debug.log
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_init.py:setup_run_log_directory():704] Logging internal logs to /Users/benjipro/MLX/MLX_vision_transformer/MLX8-W3-VisionTransformer/.bb/wandb/run-20250625_163224-kjstpeaf/logs/debug-internal.log
+2025-06-25 16:32:24,843 INFO    MainThread:6062 [wandb_init.py:init():831] calling init triggers
+2025-06-25 16:32:24,844 INFO    MainThread:6062 [wandb_init.py:init():836] wandb.init called with sweep_config: {}
+config: {'num_epochs': 10, 'batch_size': 60000, 'learning_rate': 0.003, 'embedding_dim': 64, '_wandb': {}}
+2025-06-25 16:32:24,844 INFO    MainThread:6062 [wandb_init.py:init():872] starting backend
+2025-06-25 16:32:25,074 INFO    MainThread:6062 [wandb_init.py:init():875] sending inform_init request
+2025-06-25 16:32:25,104 INFO    MainThread:6062 [wandb_init.py:init():883] backend started and connected
+2025-06-25 16:32:25,107 INFO    MainThread:6062 [wandb_init.py:init():956] updated telemetry
+2025-06-25 16:32:25,125 INFO    MainThread:6062 [wandb_init.py:init():980] communicating run to backend with 90.0 second timeout
+2025-06-25 16:32:25,580 INFO    MainThread:6062 [wandb_init.py:init():1032] starting run threads in backend
+2025-06-25 16:32:25,606 INFO    MainThread:6062 [wandb_run.py:_console_start():2453] atexit reg
+2025-06-25 16:32:25,606 INFO    MainThread:6062 [wandb_run.py:_redirect():2301] redirect: wrap_raw
+2025-06-25 16:32:25,606 INFO    MainThread:6062 [wandb_run.py:_redirect():2370] Wrapping output streams.
+2025-06-25 16:32:25,606 INFO    MainThread:6062 [wandb_run.py:_redirect():2393] Redirects installed.
+2025-06-25 16:32:25,608 INFO    MainThread:6062 [wandb_init.py:init():1078] run started, returning control to user process
+2025-06-25 16:32:28,905 INFO    MsgRouterThr:6062 [mailbox.py:close():129] [no run ID] Closing mailbox, abandoning 1 handles.
