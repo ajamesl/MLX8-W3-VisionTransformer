@@ -156,8 +156,15 @@ class Head(nn.Module):
         v = self.value(y)  # Shape: (B, T, head_size)
         # Compute attention scores ("affinities")
         attn = (q @ k.transpose(-2, -1)) * (self.head_size**-0.5)  # (B, T, head_size) @ (B, head_size, T) ---> (B, T, T)
-        if mask is not None:           
+        print("[DEBUG][Head] mask dtype:", mask.dtype if mask is not None else None, "mask shape:", mask.shape if mask is not None else None)
+        if mask is not None:
+            print("[DEBUG][Head] mask values (unique):", mask.unique())
+            if torch.isnan(mask.float()).any():
+                print("[ALERT][Head] mask contains NaNs!")
             attn = attn.masked_fill(mask == 0, float('-inf')) # (B, T, T)
+        print("[DEBUG][Head] attn min/max:", attn.min().item(), attn.max().item())
+        if torch.isnan(attn).any() or torch.isinf(attn).any():
+            print("[ALERT][Head] attn contains NaNs or infs!")
         attn = F.softmax(attn, dim=-1) # (B, T, T)
         out = attn @ v  # (B, T, T) @ (B, T, head_size) ---> (B, T, head_size)
         return out
@@ -385,20 +392,32 @@ for epoch in range(epochs):
     correct_total, sample_total = 0, 0
     seq_correct, seq_total = 0, 0
     model.train()
+    batch_debug_limit = 2  # Number of batches to print/debug
+    batch_count = 0
     for x_batch, y_batch, y_lens in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
         B = x_batch.size(0)
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
         y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
         y_target = y_batch.clone() # (B, seq_len)
+        print("[DEBUG][Train] logits min/max:", logits.min().item(), logits.max().item())
+        if torch.isnan(logits).any() or torch.isinf(logits).any():
+            print("[ALERT][Train] logits contain NaNs or infs!")
+
         logits = model(x_batch, y_input) # (B, seq_len, vocab_size)
 
         # Flatten loss & y_target to avoid loss not averaging across all tokens in all batches
         vocab_size = logits.size(-1)
         logits = logits.reshape(-1, vocab_size) # (B * seq_len, vocab_size)
         y_target = y_target.reshape(-1) # (B * seq_len)
+        print("[DEBUG][Train] y_target unique:", y_target.unique())
+
         loss = loss_fn(logits, y_target)
         optimizer.zero_grad()
+        print("[DEBUG][Train] loss:", loss.item())
+        if torch.isnan(loss):
+            print("[ALERT][Train] loss is NaN!")
+
         loss.backward()
         optimizer.step()
         scheduler.step()
@@ -430,6 +449,12 @@ for epoch in range(epochs):
             if pred_digits == true_digits:
                 seq_correct += 1
             seq_total += 1
+
+    batch_count += 1
+    if batch_count > batch_debug_limit:
+        print("[DEBUG] Breaking after a few batches for diagnostics.")
+        break
+
 
     epoch_token_accuracy = (correct_total / sample_total) * 100
     epoch_seq_accuracy = (seq_correct / seq_total) * 100
