@@ -207,7 +207,7 @@ class Transformer(nn.Module):
         self.final_linear = nn.Linear(embed_dim, num_classes)
 
         self.seq_len = seq_len
-        self.vocab_size = num_classes + 1  # +1 for start token
+        self.vocab_size = num_classes + 3  # +1 for start token
         self.tok_embed = nn.Embedding(self.vocab_size, embed_dim)
 
         self.pos_encod_dec = nn.Parameter(torch.zeros(1, seq_len, embed_dim))  # WHY?

@@ -8,9 +8,9 @@ def get_hyperparams():
         "embed_dim": 64,
         "num_heads": 4,
         "num_layers": 3,
-        "num_classes": 10,
+        "num_classes": 12,
         "img_size": (28,84),
         "data_path": "./data",
-        "seq_len": 3,
+        "seq_len": 4,
     }
 

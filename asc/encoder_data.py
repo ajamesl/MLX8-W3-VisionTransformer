@@ -79,58 +79,52 @@ class PatchEmbed(nn.Module):
 
 
 class CustomMNISTDataset(torch.utils.data.Dataset):
-    """Custom Dataset for MNIST that stitches a given number of images together"""
-
-    def __init__(self, base_dataset, num_images=3, length=10000, out_area=256):
-        """
-        Args:
-            base_dataset: A PyTorch dataset (e.g. torchvision.datasets.MNIST)
-            num_images: How many images to stitch into one sample
-            length: How many stitched samples to generate
-            out_area: Approximate pixel area of the resized stitched image
-        """
+    def __init__(self, base_dataset, length=20000):
+        self.base_dataset = base_dataset
+        self.length = length
         self.samples = []
-        self.num_images = num_images
-
-        # Prepare available indices
-        available_indices = list(range(len(base_dataset)))
-
-        for _ in range(length):
-            # Ensure enough images left for a sample
-            if len(available_indices) < num_images:
-                break
-
-            # Sample without replacement
-            sampled = random.sample(available_indices, num_images)
-            for idx in sampled:
-                available_indices.remove(idx)
-
-            # Retrieve and stitch
-            imgs, labels = zip(*[base_dataset[i] for i in sampled])
-            imgs_tensor = torch.stack(imgs)  # (num_images, 1, 28, 28)
-            stitched_img, stitched_lbl = self.stitch_and_resize(
-                imgs_tensor, labels, out_area
-            )
-            self.samples.append((stitched_img, stitched_lbl))
+        
+        # Precompute digit indices for efficient sampling
+        self.digit_indices = {d: [] for d in range(10)}
+        for idx, (_, label) in enumerate(base_dataset):
+            self.digit_indices[label].append(idx)
+        
+        # Generate equal number of asc/desc sequences
+        for _ in range(length // 2):
+            # Generate ascending sequence
+            self.samples.append(self._generate_sequence(ascending=True))
+            # Generate descending sequence
+            self.samples.append(self._generate_sequence(ascending=False))
+    
+    def _generate_sequence(self, ascending):
+        if ascending:
+            # Generate strictly increasing sequence
+            digits = sorted(random.sample(range(0, 10), 3))
+            seq_label = 10
+        else:
+            # Generate strictly decreasing sequence
+            digits = sorted(random.sample(range(0, 10), 3), reverse=True)
+            seq_label = 11
+            
+        d1, d2, d3 = digits
+        
+        # Get random images for selected digits
+        idx1 = random.choice(self.digit_indices[d1])
+        idx2 = random.choice(self.digit_indices[d2])
+        idx3 = random.choice(self.digit_indices[d3])
+        
+        img1, _ = self.base_dataset[idx1]
+        img2, _ = self.base_dataset[idx2]
+        img3, _ = self.base_dataset[idx3]
+        
+        # Stitch images horizontally
+        stitched = torch.cat([img1, img2, img3], dim=2)  # (1, 28, 84)
+        labels = torch.tensor([d1, d2, d3, seq_label], dtype=torch.long)
+        
+        return stitched, labels
 
     def __len__(self):
         return len(self.samples)
-
+    
     def __getitem__(self, idx):
         return self.samples[idx]
-
-    def stitch_and_resize(self, images, labels, out_area):
-        """
-        Stitches `num_images` grayscale digits horizontally and resizes to approx out_area.
-        Returns: stitched image (1, h, w), label tensor (num_images,)
-        """
-        assert images.shape[0] == self.num_images
-        images = images.squeeze(1)  # (num_images, 28, 28)
-        stitched = torch.cat(
-            list(images), dim=1
-        )  # horizontal concat → (28, 28 * num_images)
-
-        stitched = stitched.unsqueeze(0)  # (1, 1, h, w)
-
-        label_tensor = torch.tensor(labels, dtype=torch.long)
-        return stitched, label_tensor
