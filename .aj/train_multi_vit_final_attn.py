@@ -151,11 +151,14 @@ class Head(nn.Module):
 
     def forward(self, x, y, mask=None):
         B, T , _ = x.shape
+        print(f"[DEBUG][Head.input] x min/max: {x.min().item()} {x.max().item()} y min/max: {y.min().item()} {y.max().item()}")
         q = self.query(x)  # Shape: (B, T, head_size)
         k = self.key(y)  # Shape: (B, T, head_size)
         v = self.value(y)  # Shape: (B, T, head_size)
+        print(f"[DEBUG][Head.q] min/max: {q.min().item()} {q.max().item()} | k: {k.min().item()} {k.max().item()} | v: {v.min().item()} {v.max().item()}")
         # Compute attention scores ("affinities")
         attn = (q @ k.transpose(-2, -1)) * (self.head_size**-0.5)  # (B, T, head_size) @ (B, head_size, T) ---> (B, T, T)
+        print(f"[DEBUG][Head.attn_pre_mask] min/max: {attn.min().item()} {attn.max().item()}")
         print("[DEBUG][Head] mask dtype:", mask.dtype if mask is not None else None, "mask shape:", mask.shape if mask is not None else None)
         if mask is not None:
             print("[DEBUG][Head] mask values (unique):", mask.unique())
@@ -392,11 +395,11 @@ for epoch in range(epochs):
     correct_total, sample_total = 0, 0
     seq_correct, seq_total = 0, 0
     model.train()
-    batch_debug_limit = 2  # Number of batches to print/debug
-    batch_count = 0
+
     for x_batch, y_batch, y_lens in tqdm(train_loader_stitch, desc=f"Epoch {epoch+1}/{epochs}"):
         x_batch, y_batch = x_batch.to(device), y_batch.to(device)
         B = x_batch.size(0)
+        print(f"[DEBUG][Train.input] x_batch min/max: {x_batch.min().item()} {x_batch.max().item()}")
         start_tokens = torch.full((B, 1), 10, dtype=y_batch.dtype, device=y_batch.device)
         y_input = torch.cat([start_tokens, y_batch[:, :-1]], dim=1)
         y_target = y_batch.clone() # (B, seq_len)
@@ -449,10 +452,6 @@ for epoch in range(epochs):
             if pred_digits == true_digits:
                 seq_correct += 1
             seq_total += 1
-
-    batch_count += 1
-    if batch_count > batch_debug_limit:
-        print("[DEBUG] Breaking after a few batches for diagnostics.")
         break
 
 
